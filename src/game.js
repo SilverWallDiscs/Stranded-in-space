@@ -1425,7 +1425,7 @@ function animate(now) {
   const delta = Math.min((now - lastFrame) / 1000, 0.05);
   lastFrame = now;
   if (state.phase === 'title') {
-    if (menuScene && menuScene.children[1]) menuScene.children[1].rotation.y += delta * 0.018;
+    if (menuScene && menuScene.children[3]) menuScene.children[3].rotation.y += delta * 0.018;
     renderer.render(scene, camera);
   } else if (state.phase === 'rescue') {
     updateRescue(delta);
