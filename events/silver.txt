@@ -11,7 +11,7 @@ background: none
 [MESSAGE]
 Silver se acerca a la computadora con una idea.
 
-"Si quieres intento programar mejor la red. Podría conseguir dos comidas durante los próximos tres lanzamientos, pero necesito usar la computadora. Qué dices?"
+"Si quieres, intento programar mejor la red. Podría conseguir dos comidas durante los próximos tres lanzamientos, pero necesito usar la computadora. ¿Qué dices?"
 
 [CHOICE]
 text: Dejar que lo intente
@@ -20,11 +20,11 @@ requires item: computer
 consume chance: 35%
 trigger: upgrade red
 rewards: none
-result: "Listo! La red esta mejorada. Si algo se rompio... bueno, podemos arreglarlo después."
+result: ¡Listo! La red está mejorada. Si algo se rompió... bueno, podemos arreglarlo después.
 
 [CHOICE]
 text: Mejor no arriesgarla
-description: Prefieres conservar la computadora como esta.
+description: Prefieres conservar la computadora como está.
 requires item: none
 consume chance: 0%
 trigger: none
@@ -41,9 +41,9 @@ requires companion: yes
 background: none
 
 [MESSAGE]
-Silver esta sentado junto a los suministros, mirando una lata.
+Silver está sentado junto a los suministros, mirando una lata.
 
-"No quiero molestar, pero... podemos compartir algo de comida? Hace bastante que no comemos."
+"No quiero molestar, pero... ¿podemos compartir algo de comida? Hace bastante que no comemos."
 
 [CHOICE]
 text: Compartir una lata
@@ -52,7 +52,7 @@ requires item: canned_food
 consume chance: 100%
 trigger: none
 rewards: none
-result: Silver sonrie. "Gracias. Me hacia falta más de lo que pensaba."
+result: Silver sonríe. "Gracias. Me hacia falta más de lo que pensaba."
 
 [CHOICE]
 text: Decirle que espere
@@ -61,7 +61,7 @@ requires item: none
 consume chance: 0%
 trigger: none
 rewards: none
-result: "Esta bien. La guardamos para cuando sea realmente necesario."
+result: "Está bien. La guardamos para cuando sea realmente necesario."
 
 ---
 
