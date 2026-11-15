@@ -272,6 +272,17 @@ function makePlaceholderTexture(itemId) {
   return texture;
 }
 
+function createIconNode(itemId, emoji, className) {
+  const wrapper = el('span', className || 'item-icon-wrap');
+  const image = document.createElement('img');
+  image.alt = ITEM_DATA[itemId]?.name || itemId;
+  image.src = itemId === 'silver' ? './assets/characters/silver.png' : './assets/items/' + itemId + '.png';
+  image.onerror = () => { image.classList.add('hidden'); fallback.classList.remove('hidden'); };
+  const fallback = el('span', 'icon-fallback hidden', emoji || '◉');
+  wrapper.append(image, fallback);
+  return wrapper;
+}
+
 const textureCache = new Map();
 function getItemTexture(itemId) {
   if (!textureCache.has(itemId)) {
@@ -823,8 +834,9 @@ function renderHand() {
     const info = entry.id === 'silver' ? { name: 'Silver', icon: '🧑‍🚀', size: 3 } : ITEM_DATA[entry.id];
     const card = el('div', 'hand-slot filled');
     card.style.gridColumn = 'span ' + info.size;
-    card.innerHTML = '<span class="slot-size">' + info.size + ' SLOT' + (info.size > 1 ? 'S' : '') + '</span><span class="slot-icon">' + info.icon + '</span><span class="slot-name"></span>';
-    card.querySelector('.slot-name').textContent = info.name;
+    card.appendChild(el('span', 'slot-size', info.size + ' SLOT' + (info.size > 1 ? 'S' : '')));
+    card.appendChild(createIconNode(entry.id, info.icon, 'slot-icon'));
+    card.appendChild(el('span', 'slot-name', info.name));
     root.appendChild(card);
     slot += info.size;
   }
@@ -947,8 +959,8 @@ function renderStorage() {
     if (!info) continue;
     const button = el('button', 'storage-item');
     button.type = 'button';
-    button.innerHTML = '<span class="storage-icon">' + info.icon + '</span><span class="storage-name"></span>';
-    button.querySelector('.storage-name').textContent = info.name;
+    button.appendChild(createIconNode(entry.id, info.icon, 'storage-icon'));
+    button.appendChild(el('span', 'storage-name', info.name));
     button.addEventListener('click', () => openItem(entry.uid));
     root.appendChild(button);
   }
@@ -985,7 +997,8 @@ function openItem(uid) {
   if (!entry) return;
   const info = ITEM_DATA[entry.id];
   state.selectedItem = uid;
-  $('itemDetailIcon').textContent = info.icon;
+  $('itemDetailIcon').innerHTML = '';
+  $('itemDetailIcon').appendChild(createIconNode(entry.id, info.icon, 'detail-icon-art'));
   $('itemDetailName').textContent = info.name;
   $('itemDetailDescription').textContent = info.desc;
   const actions = $('itemDetailActions');
@@ -1288,7 +1301,8 @@ function sleep() {
 
 function triggerNightEvent() {
   playSound('event');
-  const event = pick(['alien', 'debris', 'signal', 'leak', 'voice', 'silver']);
+  const nightEvents = state.companion ? ['alien', 'debris', 'signal', 'leak', 'voice', 'silver'] : ['alien', 'debris', 'signal', 'leak', 'voice'];
+  const event = pick(nightEvents);
   state.pendingEvent = event;
   const config = {
     alien: {
