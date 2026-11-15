@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080d17">
+  <meta name="description" content="Stranded in Space — una pequeña aventura de supervivencia entre las estrellas.">
+  <title>Stranded in Space</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="world" aria-label="Vista 3D del interior de la nave"></canvas>
+  <div class="vignette"></div>
+
+  <main id="game">
+    <section id="titleScreen" class="screen title-screen">
+      <div class="title-stars"></div>
+      <div class="title-copy">
+        <div class="eyebrow"><span class="status-dot"></span> TRANSMISIÓN DE EMERGENCIA · SECTOR 07</div>
+        <div class="title-mark">S<span class="title-star">✳</span>S</div>
+        <h1>STRANDED<br><span>IN SPACE</span></h1>
+        <p class="subtitle">El espacio es enorme. Tu cápsula no tanto.</p>
+        <p class="intro-copy">La nave está a punto de colisionar. Tienes 60 segundos para salvar lo que puedas. Lo que lleves contigo podría marcar la diferencia.</p>
+        <div class="title-actions">
+          <button id="startButton" class="button button-primary">INICIAR MISIÓN <span>↗</span></button>
+          <button id="continueButton" class="button button-quiet hidden">CONTINUAR VIAJE</button>
+        </div>
+        <div class="title-foot">
+          <span>WASD · MOVERSE</span><span>E · RECOGER / DEJAR</span><span>RATÓN · MIRAR</span>
+        </div>
+      </div>
+      <div class="title-ship" aria-hidden="true">
+        <div class="planet planet-one"></div>
+        <div class="planet planet-two"></div>
+        <div class="ship-silhouette"><span></span><i></i></div>
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+      </div>
+      <div class="version-tag">BUILD 0.1.0 · PROTOTIPO</div>
+    </section>
+
+    <header id="topbar" class="topbar hidden">
+      <div class="brand"><span class="brand-mark">✳</span><span>STRANDED <b>IN SPACE</b></span></div>
+      <div class="topbar-center"><span class="live-dot"></span><span id="phaseLabel">EVACUACIÓN</span><span class="top-divider"></span><span id="dayLabel">DÍA 01</span></div>
+      <div class="topbar-right">
+        <div class="resource-chip"><span class="resource-icon">⚡</span><span id="energyTop">4 / 4</span></div>
+        <button id="soundButton" class="icon-button" aria-label="Activar o silenciar sonido" title="Sonido">♫</button>
+        <button id="pauseButton" class="icon-button" aria-label="Pausar">Ⅱ</button>
+      </div>
+    </header>
+
+    <section id="rescueHud" class="hud-layer hidden">
+      <div class="rescue-left">
+        <div class="timer-card">
+          <div class="timer-caption">IMPACTO EN</div>
+          <div id="countdown" class="countdown">60<span>s</span></div>
+          <div class="timer-track"><div id="timerFill" class="timer-fill"></div></div>
+          <div class="timer-sub">EVACÚA LA NAVE</div>
+        </div>
+        <div class="objective-card">
+          <div class="panel-kicker">OBJETIVO</div>
+          <p id="objectiveText">Encuentra objetos y llévalos a la cápsula.</p>
+          <div class="objective-location"><span class="location-pulse"></span> CÁPSULA DE ESCAPE <b id="podDistance">LEJOS</b></div>
+        </div>
+      </div>
+
+      <div class="rescue-right">
+        <div class="panel-card hand-card">
+          <div class="panel-heading"><span>LO QUE LLEVAS</span><span id="handCount">0 / 3</span></div>
+          <div id="handSlots" class="hand-slots">
+            <div class="hand-slot empty"><span>01</span></div>
+            <div class="hand-slot empty"><span>02</span></div>
+            <div class="hand-slot empty"><span>03</span></div>
+          </div>
+          <div class="panel-hint">Máximo 3 espacios · Algunos objetos son grandes</div>
+        </div>
+        <div class="panel-card pod-mini-card">
+          <div class="pod-mini-icon">◉</div>
+          <div><div class="panel-kicker">ESCAPE POD</div><strong id="podItemCount">0 objetos guardados</strong><small id="podMiniHint">Acércate para depositar</small></div>
+        </div>
+      </div>
+
+      <div class="crosshair"><span></span><i></i></div>
+      <div id="interactionHint" class="interaction-hint hidden"><kbd>E</kbd><span id="interactionText">RECOGER</span></div>
+      <div class="bottom-hint"><kbd>W A S D</kbd> MOVERSE <span>·</span> <kbd>RATÓN</kbd> MIRAR <span>·</span> <kbd>E</kbd> INTERACTUAR</div>
+      <div id="rescueNotice" class="rescue-notice hidden"></div>
+    </section>
+
+    <section id="survivalHud" class="hud-layer hidden">
+      <aside class="survival-left">
+        <div class="panel-card hull-card">
+          <div class="panel-heading"><span>INTEGRIDAD DE LA CÁPSULA</span><b id="hullValue">100%</b></div>
+          <div class="hull-track"><div id="hullFill" class="hull-fill"></div></div>
+          <div id="hullStatus" class="panel-hint">Estructura estable</div>
+        </div>
+        <div class="panel-card pod-inventory-card">
+          <div class="panel-heading"><span>ALMACENAMIENTO</span><span id="storageCount">0 ITEMS</span></div>
+          <div id="storageGrid" class="storage-grid"></div>
+          <div class="panel-hint">Selecciona un objeto para usarlo</div>
+        </div>
+      </aside>
+
+      <aside class="survival-right">
+        <div class="panel-card day-card">
+          <div class="day-number">DÍA <strong id="dayNumber">01</strong></div>
+          <p id="dayCaption">Flotando en algún lugar del vacío.</p>
+          <div class="energy-row"><span>ENERGÍA</span><div id="energyPips" class="energy-pips"></div><b id="energyLabel">4 / 4</b></div>
+        </div>
+        <div class="panel-card actions-card">
+          <div class="panel-heading"><span>ACCIONES</span><span class="panel-kicker">GASTAN ENERGÍA</span></div>
+          <button id="netButton" class="action-button"><span class="action-icon">⌁</span><span><b>Lanzar la red</b><small>Buscar objetos en el espacio · 1 ⚡</small></span><kbd>1</kbd></button>
+          <button id="repairButton" class="action-button"><span class="action-icon">⚒</span><span><b>Reparar cápsula</b><small>Restaurar al 100% · 1 ⚡</small></span><kbd>2</kbd></button>
+          <button id="talkButton" class="action-button"><span class="action-icon">☏</span><span><b>Hablar con Silver</b><small>Una conversación · 1 ⚡</small></span><kbd>3</kbd></button>
+          <button id="sleepButton" class="action-button action-sleep"><span class="action-icon">☾</span><span><b>Descansar</b><small>Terminar el día y dormir</small></span><kbd>4</kbd></button>
+        </div>
+        <div class="panel-card companion-card" id="companionCard">
+          <div class="companion-avatar">S</div><div><div class="panel-kicker">COMPAÑERO</div><b id="companionName">Nadie a bordo</b><small id="companionStatus">Viajas en solitario</small></div>
+        </div>
+      </aside>
+      <div id="survivalToast" class="survival-toast hidden"></div>
+    </section>
+
+    <section id="launchOverlay" class="cinematic-overlay hidden">
+      <div class="cinematic-copy"><span class="eyebrow">SECUENCIA DE ESCAPE</span><h2 id="cinematicTitle">SEPARACIÓN<br>CONFIRMADA</h2><p id="cinematicText">Abandonando la nave nodriza…</p></div>
+      <div class="cinematic-progress"><span></span></div>
+    </section>
+
+    <section id="netModal" class="modal-screen hidden">
+      <div class="modal-panel net-panel">
+        <div class="modal-top"><span class="panel-kicker">RECUPERACIÓN EXTERIOR</span><button class="close-button" data-close="netModal">×</button></div>
+        <h2>UNA RED EN EL VACÍO</h2>
+        <p id="netStatusText">Te acercas a la ventana y preparas el mecanismo de lanzamiento.</p>
+        <div class="net-animation" id="netAnimation">
+          <div class="net-window"><div class="net-stars"></div><div class="net-figure">◉</div><div class="net-line"></div><div class="net-mesh"></div></div>
+          <div class="net-machine">⌁ <span>WINCH / 01</span></div>
+        </div>
+        <div id="netReward" class="net-reward hidden"></div>
+        <label class="battery-toggle"><input id="batteryBoost" type="checkbox"><span class="toggle-track"></span><span>Conectar una batería para mejorar la búsqueda <b>−1 batería</b></span></label>
+        <button id="castNetButton" class="button button-primary button-wide">LANZAR LA RED · 1 ⚡</button>
+      </div>
+    </section>
+
+    <section id="repairModal" class="modal-screen hidden">
+      <div class="modal-panel repair-panel">
+        <div class="modal-top"><span class="panel-kicker">MANTENIMIENTO MANUAL</span><button class="close-button" data-close="repairModal">×</button></div>
+        <h2>SELLAR EL CASCO</h2>
+        <p id="repairInstructions">Alinea el taladro con los tornillos y asegúralos en orden.</p>
+        <div class="drill-scene">
+          <div class="drill-wall"><div class="wall-label">HULL PANEL · A-07</div><div id="screwBoard" class="screw-board"></div></div>
+          <div class="drill-tool" id="drillTool">╱<span>◉</span></div>
+        </div>
+        <div class="repair-progress"><div id="repairFill"></div></div>
+        <div id="repairStatus" class="repair-status">ESPERANDO ALINEACIÓN</div>
+        <button id="repairStartButton" class="button button-primary button-wide">COMENZAR REPARACIÓN</button>
+      </div>
+    </section>
+
+    <section id="eventModal" class="modal-screen hidden">
+      <div class="modal-panel event-panel">
+        <div class="event-symbol" id="eventSymbol">✦</div>
+        <div class="panel-kicker" id="eventKicker">EVENTO NOCTURNO</div>
+        <h2 id="eventTitle">ALGO SE MUEVE AFUERA</h2>
+        <p id="eventDescription"></p>
+        <div id="eventChoices" class="event-choices"></div>
+      </div>
+    </section>
+
+    <section id="dialogModal" class="modal-screen hidden">
+      <div class="modal-panel dialog-panel">
+        <div class="modal-top"><span class="panel-kicker">CANAL PRIVADO · SILVER</span><button class="close-button" data-close="dialogModal">×</button></div>
+        <div class="dialog-avatar">S</div>
+        <div class="dialog-bubble" id="dialogText"></div>
+        <div id="dialogChoices" class="event-choices"></div>
+      </div>
+    </section>
+
+    <section id="itemModal" class="modal-screen hidden">
+      <div class="modal-panel item-detail-panel">
+        <button class="close-button item-close" data-close="itemModal">×</button>
+        <div id="itemDetailIcon" class="item-detail-icon"></div>
+        <div class="panel-kicker">OBJETO RECUPERADO</div>
+        <h2 id="itemDetailName"></h2>
+        <p id="itemDetailDescription"></p>
+        <div id="itemDetailActions" class="event-choices"></div>
+      </div>
+    </section>
+
+    <section id="pauseModal" class="modal-screen hidden">
+      <div class="modal-panel pause-panel">
+        <div class="panel-kicker">SISTEMA DE NAVEGACIÓN</div><h2>PAUSA</h2>
+        <p>La inmensidad puede esperar un momento.</p>
+        <button id="resumeButton" class="button button-primary button-wide">CONTINUAR</button>
+        <button id="resetButton" class="button button-quiet button-wide">REINICIAR MISIÓN</button>
+      </div>
+    </section>
+
+    <section id="gameOverScreen" class="screen ending-screen hidden">
+      <div class="ending-symbol">✕</div><div class="eyebrow">SEÑAL PERDIDA</div>
+      <h2 id="endingTitle">NO HUBO ESCAPE</h2><p id="endingText">El silencio se tragó la última transmisión.</p>
+      <button id="retryButton" class="button button-primary">VOLVER A INTENTARLO ↗</button>
+    </section>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="./src/game.js"></script>
+</body>
+</html>
