@@ -64,18 +64,18 @@ function showDataEvent(event,category){
   $('eventSymbol').textContent=category==='silver'?'S':'✦';
   $('eventKicker').textContent=category==='silver'?'CANAL PRIVADO · SILVER':'EVENTO NOCTURNO';
   $('eventTitle').textContent=event['event name'];
-  $('eventDescription').textContent=chain[0]||event['event message']||'Algo sucede en la oscuridad.';
+  $('eventDescription').textContent=chain.length?chain.join('\\n\\n'):(event['event message']||'Algo sucede en la oscuridad.');
   const panel=$('eventModal').querySelector('.event-panel');const bg=event['event space background'];
   panel.style.backgroundImage=bg&&bg!=='none'?'linear-gradient(rgba(7,12,22,.82),rgba(7,12,22,.96)),url("'+bg+'")':'';
   panel.style.backgroundSize='cover';panel.style.backgroundPosition='center';
   const root=$('eventChoices');root.innerHTML='';
   const choices=eventList(event['event choices']);
   if(!choices.length){
-    addEventChoice(root,'Continuar','',true,()=>{const item=String(event['event use item']||'none').toLowerCase().replace(/ /g,'_');if(item!=='none'){const found=eventItem(item);if(!found){showSurvivalToast('Necesitas '+(ITEM_DATA[item]?.name||item));return;}if(Math.random()*100<clamp(Number(event['event chance consuming item']??100),0,100))removeInventoryEntry(found.uid);}
+    addEventChoice(root,'Continuar','',true,()=>{const item=String(event['event use item']||'none').toLowerCase().replace(/ /g,'_');if(item!=='none'){const found=eventItem(item);if(!found){showSurvivalToast('Necesitas '+(ITEM_DATA[item]?.name||item));return;}if(Math.random()*100<clamp(Number(event['event chance consuming item']??100),0,100)){removeInventoryEntry(found.uid);if(item==='computer')state.computerBroken=true;}}
       applyEventTrigger(event['event trigger']);applyEventRewards(event['recompensas']||event['event rewards']);finishNight('La noche continúa.');});
   }else choices.forEach((raw,index)=>{const p=String(raw).split('|').map(x=>x.trim());const label=p[0]||'Opción '+(index+1),trigger=p[1]||'none',item=(p[2]||'none').toLowerCase().replace(/ /g,'_'),chance=Number(p[3]??100),rewards=p[4]||'none',desc=p[5]||'';
     const available=item==='none'||!!eventItem(item);
-    addEventChoice(root,label,desc,available,()=>{if(item!=='none'&&Math.random()*100<clamp(chance,0,100)){const found=eventItem(item);if(found)removeInventoryEntry(found.uid);}applyEventTrigger(trigger);applyEventRewards(rewards);finishNight(p[6]||'La noche continúa.');},'Necesitas '+item);
+    addEventChoice(root,label,desc,available,()=>{if(item!=='none'&&Math.random()*100<clamp(chance,0,100)){const found=eventItem(item);if(found){removeInventoryEntry(found.uid);if(item==='computer')state.computerBroken=true;}}applyEventTrigger(trigger);applyEventRewards(rewards);finishNight(p[6]||'La noche continúa.');},'Necesitas '+item);
   });
   showModal('eventModal');
 }
