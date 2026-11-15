@@ -1,6 +1,6 @@
 # EVENTOS DE DESCANSO
 # Puedes copiar un bloque [EVENT] para crear otro evento.
-# Borra el # de las lineas de ejemplo solo si quieres usar esos campos.
+# Borra el # de las líneas de ejemplo solo si quieres usar esos campos.
 
 [EVENT]
 name: El visitante de la ventana
@@ -25,7 +25,7 @@ result: El visitante hace una reverencia y se aleja. Por primera vez, el silenci
 
 [CHOICE]
 text: No darle comida
-description: No sabes quién es ni que quiere. Decides no compartir tus provisiones.
+description: No sabes quién es ni qué quiere. Decides no compartir tus provisiones.
 requires item: none
 consume chance: 0%
 trigger: break pod
@@ -52,7 +52,7 @@ requires item: duct_tape
 consume chance: 100%
 trigger: none
 rewards: none
-result: La cinta aguanta. No es una reparación bonita, pero sobrevivira otra noche.
+result: La cinta aguanta. No es una reparación bonita, pero sobrevivirá otra noche.
 
 [CHOICE]
 text: Ignorarlo
@@ -74,11 +74,11 @@ background: none
 [MESSAGE]
 La radio se enciende sola a mitad de la noche.
 
-Una melodía muy lejana se filtra por los altavoces. En la consola aparece: "Pueden oírme?"
+Una melodía muy lejana se filtra por los altavoces. En la consola aparece: "¿Pueden oírme?"
 
 [CHOICE]
 text: Responder a la señal
-description: Envias un mensaje corto por radio.
+description: Envías un mensaje corto por radio.
 requires item: none
 consume chance: 0%
 trigger: none
