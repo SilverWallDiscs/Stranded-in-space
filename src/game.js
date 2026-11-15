@@ -26,10 +26,10 @@ let eventLibrary = { rest: [], silver: [] };
 function parseEventFile(source) {
   // Nuevo formato por bloques: [EVENT], [MESSAGE] y [CHOICE].
   // Se conserva la lectura del formato anterior para no romper archivos antiguos.
-  if (!/^\\[(EVENT|MESSAGE|CHOICE)\\]\\s*$/im.test(source)) {
-    return source.split(/^---\\s*$/m).map((block) => {
+  if (!/^\[(EVENT|MESSAGE|CHOICE)\]\s*$/im.test(source)) {
+    return source.split(/^---\s*$/m).map((block) => {
       const event = {};
-      for (const raw of block.split(/\\r?\\n/)) {
+      for (const raw of block.split(/\r?\n/)) {
         const line = raw.trim();
         if (!line || line.startsWith('#')) continue;
         const separator = line.indexOf(':');
@@ -64,7 +64,7 @@ function parseEventFile(source) {
 
   const flushMessage = () => {
     if (!currentEvent || section !== 'MESSAGE') return;
-    const message = messageLines.join('\\n').trim();
+    const message = messageLines.join('\n').trim();
     if (message) {
       currentEvent['event message chain'] ||= [];
       currentEvent['event message chain'].push(message);
@@ -96,9 +96,9 @@ function parseEventFile(source) {
     result: 'result'
   };
 
-  for (const raw of source.split(/\\r?\\n/)) {
+  for (const raw of source.split(/\r?\n/)) {
     const line = raw.trim();
-    const header = line.match(/^\\[(EVENT|MESSAGE|CHOICE)\\]$/i);
+    const header = line.match(/^\[(EVENT|MESSAGE|CHOICE)\]$/i);
     if (header) {
       flushMessage();
       section = header[1].toUpperCase();
