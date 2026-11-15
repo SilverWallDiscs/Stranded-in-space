@@ -86,7 +86,12 @@ h1 span { color: var(--cyan); }
 .hand-slot { min-width: 0; height: 65px; background: rgba(255,255,255,.035); border: 1px dashed rgba(175,203,220,.19); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .hand-slot.empty span { color: #586a7b; font: 9px 'DM Mono', monospace; }
 .hand-slot.filled { border-style: solid; border-color: rgba(141,231,231,.33); background: rgba(141,231,231,.07); }
-.hand-slot .slot-icon { font-size: 23px; }.hand-slot .slot-name { font-size: 8px; color: #e5f1f7; text-align: center; padding: 0 3px; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.hand-slot .slot-icon { font-size: 23px; }
+.slot-icon img { width: 27px; height: 27px; object-fit: contain; }
+.storage-icon img { width: 30px; height: 30px; object-fit: contain; }
+.detail-icon-art img { width: 68px; height: 68px; object-fit: contain; }
+.icon-fallback { display: inline-block; line-height: 1; }
+.detail-icon-art .icon-fallback { font-size: 52px; }.hand-slot .slot-name { font-size: 8px; color: #e5f1f7; text-align: center; padding: 0 3px; white-space: nowrap; overflow: hidden; max-width: 100%; }
 .hand-slot .slot-size { position: absolute; right: 4px; top: 3px; color: var(--cyan); font: 8px 'DM Mono', monospace; }
 .panel-hint { color: #718397; font-size: 9px; margin-top: 10px; line-height: 1.5; }
 .pod-mini-card { display: flex; align-items: center; gap: 12px; padding: 12px 15px; }
