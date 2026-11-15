@@ -71,6 +71,8 @@ type: message
 requires companion: yes
 weight: 1
 background: none
+trigger: none
+rewards: +1 star_fragment
 
 [MESSAGE]
 Silver te despierta con cuidado.
@@ -79,6 +81,3 @@ Silver te despierta con cuidado.
 
 Ambos miran por la ventana. No hay nada, pero Silver insiste en que algo se movio entre las estrellas.
 
-[EVENT]
-trigger: none
-rewards: +1 star_fragment
