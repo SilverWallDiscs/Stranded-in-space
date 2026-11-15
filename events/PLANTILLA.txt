@@ -1,32 +1,32 @@
 # PLANTILLA DE EVENTO
 # Copia este bloque y completa los campos.
-# Si no necesitas una opcion, elimina todos los bloques [CHOICE].
+# Elimina los bloques [CHOICE] si el evento solo debe mostrar Continuar.
 
 [EVENT]
-name: Escribe el nombre
+name: Nombre del evento
 type: question
 weight: 1
 requires companion: no
 background: none
 
 [MESSAGE]
-Escribe aqui lo que sucede.
-Puedes separar los parrafos con una linea en blanco.
+Escribe aquí lo que sucede.
+Puedes escribir varios párrafos o agregar otro bloque [MESSAGE].
 
 [CHOICE]
-text: Primera opcion
-description: Explica brevemente la opcion.
+text: Primera opción
+description: Explica brevemente qué hará esta opción.
 requires item: none
 consume chance: 0%
 trigger: none
 rewards: none
-result: Escribe lo que ocurre despues.
+result: Escribe lo que ocurre después de elegir.
 
 [CHOICE]
-text: Segunda opcion
-description: Explica brevemente la opcion.
+text: Segunda opción
+description: Explica brevemente qué hará esta opción.
 requires item: none
 consume chance: 0%
 trigger: none
 rewards: none
-result: Escribe el resultado de esta opcion.
+result: Escribe el resultado de esta opción.
