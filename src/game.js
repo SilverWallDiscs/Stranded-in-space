@@ -403,7 +403,7 @@ function buildRescueScene() {
 
   camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.1, 90);
   camera.position.set(0, 1.65, 7.1);
-  playerYaw = Math.PI;
+  playerYaw = 0;
   playerPitch = 0;
   camera.rotation.set(0, playerYaw, 0, 'YXZ');
 }
@@ -426,6 +426,7 @@ function createCharacterSprite(characterId, position) {
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(spriteMat);
+  new THREE.TextureLoader().load('./assets/characters/silver.png', (loaded) => { loaded.colorSpace = THREE.SRGBColorSpace; spriteMat.map = loaded; spriteMat.needsUpdate = true; }, undefined, () => {});
   sprite.scale.set(0.95, 1.25, 1);
   sprite.position.y = 1.0;
   group.add(sprite);
@@ -602,7 +603,7 @@ function hideModal(id) { $(id).classList.add('hidden'); }
 
 function setInterface(phase) {
   $('titleScreen').classList.toggle('hidden', phase !== 'title');
-  $('topbar').classList.toggle('hidden', phase === 'title' || phase === 'gameover');
+  $('topbar').classList.toggle('hidden', phase === 'title' || phase === 'gameover' || phase === 'cinematic');
   $('rescueHud').classList.toggle('hidden', phase !== 'rescue');
   $('survivalHud').classList.toggle('hidden', phase !== 'survival');
   $('launchOverlay').classList.toggle('hidden', phase !== 'cinematic');
@@ -834,7 +835,8 @@ function renderHand() {
     root.appendChild(empty);
     slot++;
   }
-  $('handCount').textContent = slot + ' / 3';
+  const usedSlots = state.hand.reduce((sum, entry) => sum + (entry.id === 'silver' ? 3 : ITEM_DATA[entry.id].size), 0);
+  $('handCount').textContent = usedSlots + ' / 3';
   $('podItemCount').textContent = state.inventory.length + (state.companion ? ' objetos + 1 persona' : ' objetos guardados');
 }
 
@@ -1066,6 +1068,7 @@ function openNetModal() {
   $('netAnimation').classList.remove('casting');
   $('netReward').classList.add('hidden');
   $('castNetButton').disabled = false;
+  $('castNetButton').dataset.mode = 'cast';
   $('castNetButton').textContent = 'LANZAR LA RED · 1 ⚡';
   $('batteryBoost').disabled = !state.inventory.some((entry) => entry.id === 'battery');
   $('batteryBoost').checked = false;
@@ -1073,6 +1076,7 @@ function openNetModal() {
 }
 
 function castNet() {
+  if ($('castNetButton').dataset.mode === 'close') { hideModal('netModal'); $('castNetButton').dataset.mode = 'cast'; return; }
   if (state.energy < 1) { showSurvivalToast('No tienes energía suficiente.'); return; }
   const useBattery = $('batteryBoost').checked;
   const batteryEntry = state.inventory.find((entry) => entry.id === 'battery');
@@ -1112,8 +1116,8 @@ function castNet() {
     $('netReward').classList.remove('hidden');
     $('netStatusText').textContent = 'La red regresó. Mira lo que encontraste.';
     $('castNetButton').textContent = 'CERRAR';
+    $('castNetButton').dataset.mode = 'close';
     $('castNetButton').disabled = false;
-    $('castNetButton').onclick = () => hideModal('netModal');
     playSound('reward');
     saveGame();
   }, 2100);
@@ -1133,6 +1137,8 @@ function openRepair() {
   $('repairFill').style.width = '0%';
   $('repairStartButton').classList.remove('hidden');
   $('repairStartButton').disabled = false;
+  $('repairStartButton').dataset.mode = 'start';
+  $('repairStartButton').textContent = 'COMENZAR REPARACIÓN';
   const board = $('screwBoard');
   board.innerHTML = '';
   for (let i = 0; i < 6; i++) {
@@ -1147,6 +1153,13 @@ function openRepair() {
 }
 
 function startRepairMinigame() {
+  if ($('repairStartButton').dataset.mode === 'close') {
+    hideModal('repairModal');
+    $('repairStartButton').dataset.mode = 'start';
+    $('repairStartButton').textContent = 'COMENZAR REPARACIÓN';
+    return;
+  }
+  $('repairStartButton').dataset.mode = 'playing';
   $('repairStartButton').classList.add('hidden');
   $('repairInstructions').textContent = 'Sigue el destello. Haz clic en cada tornillo en el orden correcto.';
   $('repairStatus').textContent = 'ALINEANDO TALADRO…';
@@ -1166,7 +1179,7 @@ function highlightRepairScrew() {
 }
 
 function tightenScrew(index) {
-  if ($('repairStartButton').classList.contains('hidden') === false) return;
+  if ($('repairStartButton').dataset.mode !== 'playing') return;
   if (state.repairStep >= 3) return;
   const expected = state.repairSequence[state.repairStep];
   if (index !== expected) {
@@ -1187,8 +1200,8 @@ function tightenScrew(index) {
     syncHud();
     saveGame();
     $('repairStartButton').classList.remove('hidden');
+    $('repairStartButton').dataset.mode = 'close';
     $('repairStartButton').textContent = 'TERMINAR';
-    $('repairStartButton').onclick = () => { hideModal('repairModal'); $('repairStartButton').textContent = 'COMENZAR REPARACIÓN'; $('repairStartButton').onclick = startRepairMinigame; };
     playSound('success');
   } else {
     $('repairStatus').textContent = 'TORNILLO ' + (state.repairStep + 1) + ' DE 3 · SIGUE EL DESTELLO';
@@ -1426,6 +1439,7 @@ function bindEvents() {
   $('soundButton').addEventListener('click', () => {
     state.muted = !state.muted;
     $('soundButton').textContent = state.muted ? '×' : '♫';
+    if (ambienceOsc) ambienceOsc.gain.gain.value = state.muted ? 0 : 0.018;
     if (!state.muted) playSound('click');
   });
   $('pauseButton').addEventListener('click', openPause);
