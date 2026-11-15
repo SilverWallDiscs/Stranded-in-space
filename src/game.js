@@ -511,7 +511,7 @@ function buildPodInteriorScene() {
   // Forward observation window.
   const windowRim = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.18, 16, 64), new THREE.MeshStandardMaterial({ color: 0x647d8c, metalness: 0.8, roughness: 0.25 }));
   windowRim.position.set(0, 2.1, -6.15); scene.add(windowRim);
-  const windowGlass = new THREE.Mesh(new THREE.CircleGeometry(1.52, 64), new THREE.MeshBasicMaterial({ color: 0x102d48 }));
+  const windowGlass = new THREE.Mesh(new THREE.CircleGeometry(1.52, 64), new THREE.MeshBasicMaterial({ color: 0x102d48, transparent: true, opacity: 0.2, depthWrite: false }));
   windowGlass.position.set(0, 2.1, -6.18); scene.add(windowGlass);
   const planet = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 28), new THREE.MeshStandardMaterial({ color: 0x355a77, emissive: 0x0b2138, roughness: 0.95 }));
   planet.position.set(-0.55, 2.4, -7.0); scene.add(planet);
