@@ -1537,13 +1537,27 @@ function sleep() {
 
 function triggerNightEvent() {
   playSound('event');
-  const category=state.companion&&eventLibrary.silver.length&&Math.random()<0.45?'silver':'rest';
-  const pool=eventLibrary[category];
-  if(!pool.length){finishNight('Descansaste sin problema.');return;}
-  const weight=pool.map(e=>Math.max(1,Number(e['event weight']||1)));
-  let roll=Math.random()*weight.reduce((a,b)=>a+b,0),chosen=pool[0];
-  for(let i=0;i<pool.length;i++){roll-=weight[i];if(roll<=0){chosen=pool[i];break;}}
-  showDataEvent(chosen,category);
+  const canUseSilverEvents = state.companion && eventLibrary.silver.length > 0;
+  const category = canUseSilverEvents && Math.random() < 0.45 ? 'silver' : 'rest';
+  const pool = eventLibrary[category].filter((event) => {
+    const needsCompanion = String(event['event requires companion'] || 'no').toLowerCase() === 'yes';
+    return !needsCompanion || state.companion;
+  });
+  if (!pool.length) {
+    finishNight('Descansaste sin problema.');
+    return;
+  }
+  const weights = pool.map((event) => Math.max(1, Number(event['event weight'] || 1)));
+  let roll = Math.random() * weights.reduce((sum, weight) => sum + weight, 0);
+  let chosen = pool[0];
+  for (let index = 0; index < pool.length; index += 1) {
+    roll -= weights[index];
+    if (roll <= 0) {
+      chosen = pool[index];
+      break;
+    }
+  }
+  showDataEvent(chosen, category);
 }
 
 function addEventChoice(root, label, description, enabled, callback, disabledText) {
