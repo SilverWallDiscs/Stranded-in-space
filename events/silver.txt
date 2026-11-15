@@ -11,7 +11,7 @@ background: none
 [MESSAGE]
 Silver se acerca a la computadora con una idea.
 
-"Si quieres intento programar mejor la red. Podria conseguir dos comidas durante los proximos tres lanzamientos, pero necesito usar la computadora. Que dices?"
+"Si quieres intento programar mejor la red. Podría conseguir dos comidas durante los próximos tres lanzamientos, pero necesito usar la computadora. Qué dices?"
 
 [CHOICE]
 text: Dejar que lo intente
@@ -20,7 +20,7 @@ requires item: computer
 consume chance: 35%
 trigger: upgrade red
 rewards: none
-result: "Listo! La red esta mejorada. Si algo se rompio... bueno, podemos arreglarlo despues."
+result: "Listo! La red esta mejorada. Si algo se rompio... bueno, podemos arreglarlo después."
 
 [CHOICE]
 text: Mejor no arriesgarla
@@ -29,7 +29,7 @@ requires item: none
 consume chance: 0%
 trigger: none
 rewards: none
-result: "Tiene sentido. Podemos intentarlo cuando tengamos mas recursos."
+result: "Tiene sentido. Podemos intentarlo cuando tengamos más recursos."
 
 ---
 
@@ -52,7 +52,7 @@ requires item: canned_food
 consume chance: 100%
 trigger: none
 rewards: none
-result: Silver sonrie. "Gracias. Me hacia falta mas de lo que pensaba."
+result: Silver sonrie. "Gracias. Me hacia falta más de lo que pensaba."
 
 [CHOICE]
 text: Decirle que espere
@@ -77,7 +77,7 @@ rewards: +1 star_fragment
 [MESSAGE]
 Silver te despierta con cuidado.
 
-"Escuche tres golpes desde fuera. No creo que haya sido un meteorito..."
+"Escuché tres golpes desde fuera. No creo que haya sido un meteorito..."
 
-Ambos miran por la ventana. No hay nada, pero Silver insiste en que algo se movio entre las estrellas.
+Ambos miran por la ventana. No hay nada, pero Silver insiste en que algo se movió entre las estrellas.
 
