@@ -20,6 +20,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at center, transparent 38%, rgba(2,5,12,.68) 100%); }
 #game { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+#survivalHud .panel-card { pointer-events: auto; }
 .hidden { display: none !important; }
 .screen, .modal-screen { pointer-events: auto; }
 .title-screen { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(90deg, rgba(4,9,17,.98) 0%, rgba(4,9,17,.91) 38%, rgba(4,9,17,.16) 100%); }
@@ -144,7 +145,7 @@ kbd { font: 9px 'DM Mono', monospace; border: 1px solid rgba(183,211,227,.3); pa
 @keyframes drillShake { 0%,100% { transform: rotate(-24deg) translate(0,0); } 50% { transform: rotate(-20deg) translate(-2px,2px); } }
 @keyframes cinematicLoad { to { width: 100%; } }
 @media (max-width: 800px) {
-  .topbar { height: 52px; padding: 0 13px; }.brand { font-size: 9px; }.topbar-center { font-size: 8px; }.hud-layer { inset-top: 52px; }
+  .topbar { height: 52px; padding: 0 13px; }.brand { font-size: 9px; }.topbar-center { font-size: 8px; }.hud-layer { top: 52px; }
   .rescue-left, .survival-left { left: 12px; width: 190px; }.rescue-right, .survival-right { right: 12px; width: 195px; }
   .timer-card { padding: 12px; }.countdown { font-size: 38px; }.panel-card { padding: 11px; }.objective-card { padding: 11px; }
   .hand-slot { height: 52px; }.hand-slot .slot-icon { font-size: 18px; }.panel-hint { font-size: 8px; }
