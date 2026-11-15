@@ -44,3 +44,53 @@ See [assets/README.md](assets/README.md). Missing PNGs are replaced with simple 
 ## Notes
 
 This is an early playable prototype. The balancing values, event pool, item effects and placeholder visuals are intentionally easy to adjust in `src/game.js`.
+
+## Create your own events (no JavaScript required)
+
+Night and companion events are loaded from plain text files at startup:
+
+- `events/rest.txt`: events that can happen while sleeping.
+- `events/silver.txt`: events that can happen when Silver is travelling with you.
+
+Each event is separated by a line containing `---`. Lines beginning with `#` are comments. The parser accepts quoted text and JSON arrays.
+
+Example:
+
+```text
+event name: Silver's idea
+event type: question
+event requires companion: yes
+event weight: 3
+event space background: none
+event message chain: ["I have an idea.", "Can I use the computer to improve the net?"]
+event choices: ["Let Silver try|upgrade red|computer|35|none|Silver works on the computer.|The net is upgraded."]
+```
+
+### Event fields
+
+| Field | Meaning |
+| --- | --- |
+| `event name` | Title shown in the event window. Required. |
+| `event type` | `question` or `message`. |
+| `event weight` | Relative probability; higher means more likely. |
+| `event requires companion` | Set to `yes` for Silver-only events. |
+| `event space background` | Image path, or `none`. |
+| `event message` | One message, when no chain is needed. |
+| `event message chain` | JSON array of dialogue paragraphs shown in order. |
+| `event choices` | JSON array of choices; see the format below. |
+| `event trigger` | Effect applied when a message event is continued. |
+| `event use item` | Item required for a message event, or `none`. |
+| `event chance consuming item` | 0–100 percent chance to consume the required item. |
+| `recompensas` / `event rewards` | Items gained or lost. |
+
+A choice uses this pipe-separated format:
+
+`"Button text|trigger|item|consume chance|rewards|description|result message"`
+
+- Trigger: `none`, `upgrade red`, `break pod`, `damage pod 20`, `repair pod 15`, `break computer`, `fix computer`.
+- Item IDs: `canned_food`, `duct_tape`, `computer`, `battery`, etc.
+- Rewards: `none`, `+2 canned_food`, `-1 battery`. Separate multiple rewards with `; `.
+
+The item in a choice is required to select it. The consume chance controls whether it is actually spent. A computer consumed by an event is marked broken. For example, Silver's computer upgrade has a 35% chance to break/consume the computer, but the network upgrade succeeds either way.
+
+Use a local web server when testing so the browser can fetch these files. After adding an event, refresh the page; no code changes are needed.
