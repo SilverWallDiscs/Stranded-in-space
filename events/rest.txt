@@ -1,33 +1,126 @@
-# Stranded in Space · Eventos de descanso
-# Separa cada evento con una línea que contenga solamente ---
-# event choices: ["Texto|trigger|item|chance_consuming_item|rewards|description|result_message"]
-# rewards: none, +2 canned_food, -1 battery. Usa ; para varias recompensas.
-# triggers: none, upgrade red, break pod, damage pod 20, repair pod 15, break computer, fix computer.
+# EVENTOS DE DESCANSO
+# Puedes copiar un bloque [EVENT] para crear otro evento.
+# Borra el # de las lineas de ejemplo solo si quieres usar esos campos.
 
-event name: El visitante de la ventana
-event type: question
-event weight: 3
-event space background: none
-event message chain: ["Un golpecito suave te despierta. Una figura pequeña flota al otro lado de la ventana.","Tiene ojos enormes y una mochila de exploración. Señala tu comida y luego se lleva una mano al estómago. Parece tener hambre."]
-event choices: ["Darle una lata|none|canned_food|100|-1 canned_food|Le pasas una lata por la pequeña compuerta de intercambio. El visitante la recibe con cuidado.|El visitante hace una reverencia y se aleja. Por primera vez, el silencio del espacio parece amable.","No darle comida|break pod|none|0|none|No sabes quién es ni qué quiere. Decides no compartir tus provisiones.|La criatura golpea el casco con rabia antes de desaparecer. La cápsula pierde integridad."]
+[EVENT]
+name: El visitante de la ventana
+type: question
+weight: 3
+requires companion: no
+background: none
+
+[MESSAGE]
+Un golpecito suave te despierta. Una figura pequeña flota al otro lado de la ventana.
+
+Tiene ojos enormes y una mochila de exploracion. Senala tu comida y luego se lleva una mano al estomago. Parece tener hambre.
+
+[CHOICE]
+text: Darle una lata
+description: Le pasas una lata por la pequena compuerta de intercambio.
+requires item: canned_food
+consume chance: 100%
+trigger: none
+rewards: none
+result: El visitante hace una reverencia y se aleja. Por primera vez, el silencio del espacio parece amable.
+
+[CHOICE]
+text: No darle comida
+description: No sabes quien es ni que quiere. Decides no compartir tus provisiones.
+requires item: none
+consume chance: 0%
+trigger: break pod
+rewards: none
+result: La criatura golpea el casco con rabia antes de desaparecer. La capsula pierde integridad.
+
 ---
-event name: Lluvia de escombros
-event type: question
-event weight: 2
-event space background: none
-event message chain: ["Una vibración recorre la cápsula y te despierta.","Un fragmento de metal quedó enganchado cerca de una unión del casco. La integridad comienza a bajar."]
-event choices: ["Reparar con cinta|none|duct_tape|100|-1 duct_tape|Usas cinta aislante para contener la fisura.|La cinta aguanta. No es una reparación bonita, pero sobrevivirá otra noche.","Ignorarlo|damage pod 20|none|0|none|Te cubres con la manta y esperas que el casco resista.|El impacto termina de abrir la fisura. El aire escapa durante unos segundos."]
+
+[EVENT]
+name: Lluvia de escombros
+type: question
+weight: 2
+background: none
+
+[MESSAGE]
+Una vibracion recorre la capsula y te despierta.
+
+Un fragmento de metal quedo enganchado cerca de una union del casco. La integridad comienza a bajar.
+
+[CHOICE]
+text: Reparar con cinta
+description: Usas cinta aislante para contener la fisura.
+requires item: duct_tape
+consume chance: 100%
+trigger: none
+rewards: none
+result: La cinta aguanta. No es una reparacion bonita, pero sobrevivira otra noche.
+
+[CHOICE]
+text: Ignorarlo
+description: Te cubres con la manta y esperas que el casco resista.
+requires item: none
+consume chance: 0%
+trigger: damage pod 20
+rewards: none
+result: El impacto termina de abrir la fisura. El aire escapa durante unos segundos.
+
 ---
-event name: Una canción en el vacío
-event type: question
-event weight: 2
-event space background: none
-event message chain: ["La radio se enciende sola a mitad de la noche.","Una melodía muy lejana se filtra por los altavoces. En la consola aparece: «¿Pueden oírme?»"]
-event choices: ["Responder a la señal|none|none|0|+1 data_core|Envías un mensaje corto por radio.|La respuesta llega como un pequeño núcleo de datos. No hay voz al otro lado.","Apagar la radio|none|none|0|none|No quieres saber quién transmite.|La melodía se desvanece y el resto de la noche transcurre en calma."]
+
+[EVENT]
+name: Una cancion en el vacio
+type: question
+weight: 2
+background: none
+
+[MESSAGE]
+La radio se enciende sola a mitad de la noche.
+
+Una melodia muy lejana se filtra por los altavoces. En la consola aparece: "Pueden oirme?"
+
+[CHOICE]
+text: Responder a la senal
+description: Envias un mensaje corto por radio.
+requires item: none
+consume chance: 0%
+trigger: none
+rewards: +1 data_core
+result: La respuesta llega como un pequeno nucleo de datos. No hay voz al otro lado.
+
+[CHOICE]
+text: Apagar la radio
+description: No quieres saber quien transmite.
+requires item: none
+consume chance: 0%
+trigger: none
+rewards: none
+result: La melodia se desvanece y el resto de la noche transcurre en calma.
+
 ---
-event name: Destellos junto a la cápsula
-event type: question
-event weight: 1
-event space background: none
-event message chain: ["Tres luces aparecen en la oscuridad y desaparecen.","Algo parece estar respondiendo a la linterna de la cápsula."]
-event choices: ["Responder con la linterna|none|flashlight|0|+1 star_fragment|Iluminas el exterior para responder a la señal.|Las luces dibujan un patrón. Algo deja un fragmento brillante junto a la ventana.","Ignorar la señal|none|none|0|none|No sabes qué hay ahí fuera.|Las luces se apagan. No vuelve a ocurrir nada."]
+
+[EVENT]
+name: Destellos junto a la capsula
+type: question
+weight: 1
+background: none
+
+[MESSAGE]
+Tres luces aparecen en la oscuridad y desaparecen.
+
+Algo parece estar respondiendo a la senal de la linterna de la capsula.
+
+[CHOICE]
+text: Responder con la linterna
+description: Iluminas el exterior para responder a la senal.
+requires item: flashlight
+consume chance: 0%
+trigger: none
+rewards: +1 star_fragment
+result: Las luces dibujan un patron. Algo deja un fragmento brillante junto a la ventana.
+
+[CHOICE]
+text: Ignorar la senal
+description: No sabes que hay ahi fuera.
+requires item: none
+consume chance: 0%
+trigger: none
+rewards: none
+result: Las luces se apagan. No vuelve a ocurrir nada.
