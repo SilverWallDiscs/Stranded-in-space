@@ -12,11 +12,11 @@ background: none
 [MESSAGE]
 Un golpecito suave te despierta. Una figura pequeña flota al otro lado de la ventana.
 
-Tiene ojos enormes y una mochila de exploracion. Senala tu comida y luego se lleva una mano al estomago. Parece tener hambre.
+Tiene ojos enormes y una mochila de exploración. Señala tu comida y luego se lleva una mano al estómago. Parece tener hambre.
 
 [CHOICE]
 text: Darle una lata
-description: Le pasas una lata por la pequena compuerta de intercambio.
+description: Le pasas una lata por la pequeña compuerta de intercambio.
 requires item: canned_food
 consume chance: 100%
 trigger: none
@@ -25,12 +25,12 @@ result: El visitante hace una reverencia y se aleja. Por primera vez, el silenci
 
 [CHOICE]
 text: No darle comida
-description: No sabes quien es ni que quiere. Decides no compartir tus provisiones.
+description: No sabes quién es ni que quiere. Decides no compartir tus provisiones.
 requires item: none
 consume chance: 0%
 trigger: break pod
 rewards: none
-result: La criatura golpea el casco con rabia antes de desaparecer. La capsula pierde integridad.
+result: La criatura golpea el casco con rabia antes de desaparecer. La cápsula pierde integridad.
 
 ---
 
@@ -41,9 +41,9 @@ weight: 2
 background: none
 
 [MESSAGE]
-Una vibracion recorre la capsula y te despierta.
+Una vibración recorre la cápsula y te despierta.
 
-Un fragmento de metal quedo enganchado cerca de una union del casco. La integridad comienza a bajar.
+Un fragmento de metal quedó enganchado cerca de una unión del casco. La integridad comienza a bajar.
 
 [CHOICE]
 text: Reparar con cinta
@@ -52,7 +52,7 @@ requires item: duct_tape
 consume chance: 100%
 trigger: none
 rewards: none
-result: La cinta aguanta. No es una reparacion bonita, pero sobrevivira otra noche.
+result: La cinta aguanta. No es una reparación bonita, pero sobrevivira otra noche.
 
 [CHOICE]
 text: Ignorarlo
@@ -66,7 +66,7 @@ result: El impacto termina de abrir la fisura. El aire escapa durante unos segun
 ---
 
 [EVENT]
-name: Una cancion en el vacio
+name: Una canción en el vacío
 type: question
 weight: 2
 background: none
@@ -74,30 +74,30 @@ background: none
 [MESSAGE]
 La radio se enciende sola a mitad de la noche.
 
-Una melodia muy lejana se filtra por los altavoces. En la consola aparece: "Pueden oirme?"
+Una melodía muy lejana se filtra por los altavoces. En la consola aparece: "Pueden oírme?"
 
 [CHOICE]
-text: Responder a la senal
+text: Responder a la señal
 description: Envias un mensaje corto por radio.
 requires item: none
 consume chance: 0%
 trigger: none
 rewards: +1 data_core
-result: La respuesta llega como un pequeno nucleo de datos. No hay voz al otro lado.
+result: La respuesta llega como un pequeño núcleo de datos. No hay voz al otro lado.
 
 [CHOICE]
 text: Apagar la radio
-description: No quieres saber quien transmite.
+description: No quieres saber quién transmite.
 requires item: none
 consume chance: 0%
 trigger: none
 rewards: none
-result: La melodia se desvanece y el resto de la noche transcurre en calma.
+result: La melodía se desvanece y el resto de la noche transcurre en calma.
 
 ---
 
 [EVENT]
-name: Destellos junto a la capsula
+name: Destellos junto a la cápsula
 type: question
 weight: 1
 background: none
@@ -105,20 +105,20 @@ background: none
 [MESSAGE]
 Tres luces aparecen en la oscuridad y desaparecen.
 
-Algo parece estar respondiendo a la senal de la linterna de la capsula.
+Algo parece estar respondiendo a la señal de la linterna de la cápsula.
 
 [CHOICE]
 text: Responder con la linterna
-description: Iluminas el exterior para responder a la senal.
+description: Iluminas el exterior para responder a la señal.
 requires item: flashlight
 consume chance: 0%
 trigger: none
 rewards: +1 star_fragment
-result: Las luces dibujan un patron. Algo deja un fragmento brillante junto a la ventana.
+result: Las luces dibujan un patrón. Algo deja un fragmento brillante junto a la ventana.
 
 [CHOICE]
-text: Ignorar la senal
-description: No sabes que hay ahi fuera.
+text: Ignorar la señal
+description: No sabes que hay ahí fuera.
 requires item: none
 consume chance: 0%
 trigger: none
