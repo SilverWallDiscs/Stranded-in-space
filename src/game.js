@@ -26,7 +26,7 @@ let eventLibrary = { rest: [], silver: [] };
 function parseEventFile(source) {
   return source.split(/^---\s*$/m).map(block => {
     const event = {};
-    for (const raw of block.split(/\r?\\n/)) {
+    for (const raw of block.split(/\r?\n/)) {
       const line=raw.trim(); if(!line || line.startsWith('#')) continue;
       const i=line.indexOf(':'); if(i<0) continue;
       const key=line.slice(0,i).trim().toLowerCase(); let value=line.slice(i+1).trim();
