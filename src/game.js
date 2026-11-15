@@ -24,9 +24,9 @@ const SAVE_KEY = 'stranded-in-space-save-v1';
 const EVENT_FILES = ['./events/rest.txt', './events/silver.txt'];
 let eventLibrary = { rest: [], silver: [] };
 function parseEventFile(source) {
-  return source.split(/^---\\s*$/m).map(block => {
+  return source.split(/^---\s*$/m).map(block => {
     const event = {};
-    for (const raw of block.split(/\\r?\\n/)) {
+    for (const raw of block.split(/\r?\\n/)) {
       const line=raw.trim(); if(!line || line.startsWith('#')) continue;
       const i=line.indexOf(':'); if(i<0) continue;
       const key=line.slice(0,i).trim().toLowerCase(); let value=line.slice(i+1).trim();
@@ -44,7 +44,7 @@ async function loadEventLibrary(){
 function eventList(value){if(Array.isArray(value))return value;if(!value||value==='none')return [];return String(value).split(';').map(x=>x.trim()).filter(Boolean);}
 function eventItem(id){return state.inventory.find(x=>x.id===String(id).trim().toLowerCase().replace(/ /g,'_'));}
 function applyEventRewards(value){
-  for(const reward of eventList(value)){const m=String(reward).match(/^([+-])\\s*(\\d+)\\s+([a-z0-9_ -]+)$/i);if(!m)continue;const count=Number(m[2])*(m[1]==='-'?-1:1);const id=m[3].trim().toLowerCase().replace(/ /g,'_');if(!ITEM_DATA[id])continue;
+  for(const reward of eventList(value)){const m=String(reward).match(/^([+-])\s*(\d+)\s+([a-z0-9_ -]+)$/i);if(!m)continue;const count=Number(m[2])*(m[1]==='-'?-1:1);const id=m[3].trim().toLowerCase().replace(/ /g,'_');if(!ITEM_DATA[id])continue;
     if(count>0)addStorageItem(id,count);else for(let n=0;n<Math.abs(count);n++){const item=eventItem(id);if(item)removeInventoryEntry(item.uid);}
   }
 }
@@ -64,7 +64,7 @@ function showDataEvent(event,category){
   $('eventSymbol').textContent=category==='silver'?'S':'✦';
   $('eventKicker').textContent=category==='silver'?'CANAL PRIVADO · SILVER':'EVENTO NOCTURNO';
   $('eventTitle').textContent=event['event name'];
-  $('eventDescription').textContent=chain.length?chain.join('\\n\\n'):(event['event message']||'Algo sucede en la oscuridad.');
+  $('eventDescription').textContent=chain.length?chain.join('\n\n'):(event['event message']||'Algo sucede en la oscuridad.');
   const panel=$('eventModal').querySelector('.event-panel');const bg=event['event space background'];
   panel.style.backgroundImage=bg&&bg!=='none'?'linear-gradient(rgba(7,12,22,.82),rgba(7,12,22,.96)),url("'+bg+'")':'';
   panel.style.backgroundSize='cover';panel.style.backgroundPosition='center';
