@@ -47,9 +47,9 @@ This is an early playable prototype. The balancing values, event pool, item effe
 
 ## Crear eventos
 
-Puedes crear y editar eventos sin tocar JavaScript. Revisa [events/README.md](events/README.md) para ver la guia, y copia [events/PLANTILLA.txt](events/PLANTILLA.txt) para empezar.
+Puedes crear y editar eventos sin tocar JavaScript. Revisa [events/README.md](events/README.md) para ver la guía, y copia [events/PLANTILLA.txt](events/PLANTILLA.txt) para empezar.
 
 - `events/rest.txt`: eventos que pueden ocurrir al dormir.
 - `events/silver.txt`: eventos que requieren que Silver este contigo.
 
-Los archivos usan bloques `[EVENT]`, `[MESSAGE]` y `[CHOICE]`. Cada campo ocupa su propia linea; ya no necesitas arreglos JSON ni cadenas separadas por `|`.
+Los archivos usan bloques `[EVENT]`, `[MESSAGE]` y `[CHOICE]`. Cada campo ocupa su propia línea; ya no necesitas arreglos JSON ni cadenas separadas por `|`.
