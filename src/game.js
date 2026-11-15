@@ -24,19 +24,135 @@ const SAVE_KEY = 'stranded-in-space-save-v1';
 const EVENT_FILES = ['./events/rest.txt', './events/silver.txt'];
 let eventLibrary = { rest: [], silver: [] };
 function parseEventFile(source) {
-  return source.split(/^---\s*$/m).map(block => {
-    const event = {};
-    for (const raw of block.split(/\r?\n/)) {
-      const line=raw.trim(); if(!line || line.startsWith('#')) continue;
-      const i=line.indexOf(':'); if(i<0) continue;
-      const key=line.slice(0,i).trim().toLowerCase(); let value=line.slice(i+1).trim();
-      if(value.startsWith('[')) { try { value=JSON.parse(value); } catch(_) {} }
-      else if(/^".*"$/.test(value)) value=value.slice(1,-1).replace(/\\n/g,'\\n').replace(/\\"/g,'"');
-      event[key]=value;
+  // Nuevo formato por bloques: [EVENT], [MESSAGE] y [CHOICE].
+  // Se conserva la lectura del formato anterior para no romper archivos antiguos.
+  if (!/^\\[(EVENT|MESSAGE|CHOICE)\\]\\s*$/im.test(source)) {
+    return source.split(/^---\\s*$/m).map((block) => {
+      const event = {};
+      for (const raw of block.split(/\\r?\\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const separator = line.indexOf(':');
+        if (separator < 0) continue;
+        const key = line.slice(0, separator).trim().toLowerCase();
+        let value = line.slice(separator + 1).trim();
+        if (value.startsWith('[')) {
+          try { value = JSON.parse(value); } catch (_) {}
+        } else if (/^".*"$/.test(value)) {
+          try { value = JSON.parse(value); } catch (_) { value = value.slice(1, -1); }
+        }
+        event[key] = value;
+      }
+      return event;
+    }).filter((event) => event['event name']);
+  }
+
+  const events = [];
+  let currentEvent = null;
+  let section = null;
+  let currentChoice = null;
+  let messageLines = [];
+
+  const unquote = (value) => {
+    const text = String(value ?? '').trim();
+    if (text.startsWith('"') && text.endsWith('"')) {
+      try { return JSON.parse(text); } catch (_) { return text.slice(1, -1); }
     }
-    return event;
-  }).filter(event=>event['event name']);
+    if (text.startsWith("'") && text.endsWith("'")) return text.slice(1, -1);
+    return text;
+  };
+
+  const flushMessage = () => {
+    if (!currentEvent || section !== 'MESSAGE') return;
+    const message = messageLines.join('\\n').trim();
+    if (message) {
+      currentEvent['event message chain'] ||= [];
+      currentEvent['event message chain'].push(message);
+    }
+    messageLines = [];
+  };
+
+  const eventAliases = {
+    name: 'event name',
+    type: 'event type',
+    weight: 'event weight',
+    'requires companion': 'event requires companion',
+    background: 'event space background',
+    trigger: 'event trigger',
+    'use item': 'event use item',
+    'chance consuming item': 'event chance consuming item',
+    rewards: 'event rewards'
+  };
+
+  const choiceAliases = {
+    text: 'text',
+    description: 'description',
+    'requires item': 'item',
+    item: 'item',
+    'consume chance': 'chance',
+    chance: 'chance',
+    trigger: 'trigger',
+    rewards: 'rewards',
+    result: 'result'
+  };
+
+  for ((const raw of source.split(/\\r?\\n/))) {
+    const line = raw.trim();
+    const header = line.match(/^\\[(EVENT|MESSAGE|CHOICE)\\]$/i);
+    if (header) {
+      flushMessage();
+      section = header[1].toUpperCase();
+      if (section === 'EVENT') {
+        currentEvent = { 'event message chain': [], 'event choices': [] };
+        events.push(currentEvent);
+        currentChoice = null;
+      } else if (!currentEvent) {
+        section = null;
+      } else if (section === 'MESSAGE') {
+        messageLines = [];
+        currentChoice = null;
+      } else if (section === 'CHOICE') {
+        currentChoice = {};
+        currentEvent['event choices'].push(currentChoice);
+      }
+      continue;
+    }
+
+    if (!currentEvent || section === null || line.startsWith('#')) continue;
+
+    if (section === 'MESSAGE') {
+      // El texto del mensaje es libre: no necesita comillas ni prefijos.
+      messageLines.push(raw.trimEnd());
+      continue;
+    }
+
+    if (!line) continue;
+    const separator = line.indexOf(':');
+    if (separator < 0) continue;
+    const rawKey = line.slice(0, separator).trim().toLowerCase();
+    const value = unquote(line.slice(separator + 1));
+    if (section === 'EVENT') {
+      const key = eventAliases[rawKey] || rawKey;
+      currentEvent[key] = value;
+    } else if (section === 'CHOICE' && currentChoice) {
+      const key = choiceAliases[rawKey] || rawKey;
+      currentChoice[key] = value;
+    }
+  }
+  flushMessage();
+
+  return events.filter((event) => {
+    if (!event['event message chain'].length) delete event['event message chain'];
+    if (!event['event choices'].length) delete event['event choices'];
+    return event['event name'];
+  });
 }
+
+function eventChance(value, fallback = 100) {
+  const parsed = Number(String(value ?? fallback).replace('%', '').trim());
+  return clamp(Number.isFinite(parsed) ? parsed : fallback, 0, 100);
+}
+
 async function loadEventLibrary(){
   const files=await Promise.all(EVENT_FILES.map(async path=>{try{const r=await fetch(path);if(!r.ok)throw Error(r.status);return {path,text:await r.text()};}catch(e){console.warn('Event file unavailable:',path,e);return {path,text:''};}}));
   for(const file of files) eventLibrary[file.path.includes('silver')?'silver':'rest']=parseEventFile(file.text);
@@ -58,25 +174,86 @@ function applyEventTrigger(value){
     else if(action==='fix_computer')state.computerBroken=false;
   } syncHud();saveGame();
 }
-function showDataEvent(event,category){
-  state.pendingEvent={event,category};
-  const chain=eventList(event['event message chain']);
-  $('eventSymbol').textContent=category==='silver'?'S':'✦';
-  $('eventKicker').textContent=category==='silver'?'CANAL PRIVADO · SILVER':'EVENTO NOCTURNO';
-  $('eventTitle').textContent=event['event name'];
-  $('eventDescription').textContent=chain.length?chain.join('\n\n'):(event['event message']||'Algo sucede en la oscuridad.');
-  const panel=$('eventModal').querySelector('.event-panel');const bg=event['event space background'];
-  panel.style.backgroundImage=bg&&bg!=='none'?'linear-gradient(rgba(7,12,22,.82),rgba(7,12,22,.96)),url("'+bg+'")':'';
-  panel.style.backgroundSize='cover';panel.style.backgroundPosition='center';
-  const root=$('eventChoices');root.innerHTML='';
-  const choices=eventList(event['event choices']);
-  if(!choices.length){
-    addEventChoice(root,'Continuar','',true,()=>{const item=String(event['event use item']||'none').toLowerCase().replace(/ /g,'_');if(item!=='none'){const found=eventItem(item);if(!found){showSurvivalToast('Necesitas '+(ITEM_DATA[item]?.name||item));return;}if(Math.random()*100<clamp(Number(event['event chance consuming item']??100),0,100)){removeInventoryEntry(found.uid);if(item==='computer')state.computerBroken=true;}}
-      applyEventTrigger(event['event trigger']);applyEventRewards(event['recompensas']||event['event rewards']);finishNight('La noche continúa.');});
-  }else choices.forEach((raw,index)=>{const p=String(raw).split('|').map(x=>x.trim());const label=p[0]||'Opción '+(index+1),trigger=p[1]||'none',item=(p[2]||'none').toLowerCase().replace(/ /g,'_'),chance=Number(p[3]??100),rewards=p[4]||'none',desc=p[5]||'';
-    const available=item==='none'||!!eventItem(item);
-    addEventChoice(root,label,desc,available,()=>{if(item!=='none'&&Math.random()*100<clamp(chance,0,100)){const found=eventItem(item);if(found){removeInventoryEntry(found.uid);if(item==='computer')state.computerBroken=true;}}applyEventTrigger(trigger);applyEventRewards(rewards);finishNight(p[6]||'La noche continúa.');},'Necesitas '+item);
-  });
+function showDataEvent(event, category) {
+  state.pendingEvent = { event, category };
+
+  const messages = eventList(event['event message chain']);
+  $('eventSymbol').textContent = category === 'silver' ? 'S' : '✦';
+  $('eventKicker').textContent = category === 'silver' ? 'CANAL PRIVADO · SILVER' : 'EVENTO NOCTURNO';
+  $('eventTitle').textContent = event['event name'];
+  $('eventDescription').textContent = messages.length
+    ? messages.join('\\n\\n')
+    : (event['event message'] || 'Algo sucede en la oscuridad.');
+
+  const panel = $('eventModal').querySelector('.event-panel');
+  const background = event['event space background'];
+  panel.style.backgroundImage = background && background !== 'none'
+    ? 'linear-gradient(rgba(7,12,22,.82),rgba(7,12,22,.96)),url("' + background + '")'
+    : '';
+  panel.style.backgroundSize = 'cover';
+  panel.style.backgroundPosition = 'center';
+
+  const root = $('eventChoices');
+  root.innerHTML = '';
+  const rawChoices = eventList(event['event choices']);
+
+  if (!rawChoices.length) {
+    addEventChoice(root, 'Continuar', '', true, () => {
+      const itemId = String(event['event use item'] || 'none').toLowerCase().replace(/ /g, '_');
+      if (itemId !== 'none') {
+        const required = eventItem(itemId);
+        if (!required) {
+          showSurvivalToast('Necesitas ' + (ITEM_DATA[itemId]?.name || itemId));
+          return;
+        }
+        if (Math.random() * 100 < eventChance(event['event chance consuming item'], 100)) {
+          removeInventoryEntry(required.uid);
+          if (itemId === 'computer') state.computerBroken = true;
+        }
+      }
+      applyEventTrigger(event['event trigger']);
+      applyEventRewards(event['recompensas'] || event['event rewards']);
+      finishNight('La noche continúa.');
+    });
+  } else {
+    rawChoices.forEach((rawChoice, index) => {
+      // También acepta la sintaxis antigua con campos separados por |.
+      const choice = typeof rawChoice === 'string'
+        ? (() => {
+            const p = rawChoice.split('|').map((value) => value.trim());
+            return {
+              text: p[0] || 'Opción ' + (index + 1),
+              trigger: p[1] || 'none',
+              item: p[2] || 'none',
+              chance: p[3] ?? 100,
+              rewards: p[4] || 'none',
+              description: p[5] || '',
+              result: p[6] || 'La noche continúa.'
+            };
+          })()
+        : rawChoice;
+
+      const label = choice.text || 'Opción ' + (index + 1);
+      const itemId = String(choice.item || 'none').toLowerCase().replace(/ /g, '_');
+      const chance = eventChance(choice.chance, 100);
+      const required = itemId === 'none' ? null : eventItem(itemId);
+      const available = itemId === 'none' || !!required;
+
+      addEventChoice(root, label, choice.description || '', available, () => {
+        if (itemId !== 'none' && Math.random() * 100 < chance) {
+          const itemToConsume = eventItem(itemId);
+          if (itemToConsume) {
+            removeInventoryEntry(itemToConsume.uid);
+            if (itemId === 'computer') state.computerBroken = true;
+          }
+        }
+        applyEventTrigger(choice.trigger);
+        applyEventRewards(choice.rewards);
+        finishNight(choice.result || 'La noche continúa.');
+      }, 'Necesitas ' + (ITEM_DATA[itemId]?.name || itemId));
+    });
+  }
+
   showModal('eventModal');
 }
 
