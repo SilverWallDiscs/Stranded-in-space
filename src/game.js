@@ -96,7 +96,7 @@ function parseEventFile(source) {
     result: 'result'
   };
 
-  for ((const raw of source.split(/\\r?\\n/))) {
+  for (const raw of source.split(/\\r?\\n/)) {
     const line = raw.trim();
     const header = line.match(/^\\[(EVENT|MESSAGE|CHOICE)\\]$/i);
     if (header) {
