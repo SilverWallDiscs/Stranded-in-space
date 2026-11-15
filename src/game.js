@@ -21,6 +21,65 @@ const ITEM_DATA = {
 const LOOT_TABLE = Object.keys(ITEM_DATA);
 const SAVE_KEY = 'stranded-in-space-save-v1';
 
+const EVENT_FILES = ['./events/rest.txt', './events/silver.txt'];
+let eventLibrary = { rest: [], silver: [] };
+function parseEventFile(source) {
+  return source.split(/^---\\s*$/m).map(block => {
+    const event = {};
+    for (const raw of block.split(/\\r?\\n/)) {
+      const line=raw.trim(); if(!line || line.startsWith('#')) continue;
+      const i=line.indexOf(':'); if(i<0) continue;
+      const key=line.slice(0,i).trim().toLowerCase(); let value=line.slice(i+1).trim();
+      if(value.startsWith('[')) { try { value=JSON.parse(value); } catch(_) {} }
+      else if(/^".*"$/.test(value)) value=value.slice(1,-1).replace(/\\n/g,'\\n').replace(/\\"/g,'"');
+      event[key]=value;
+    }
+    return event;
+  }).filter(event=>event['event name']);
+}
+async function loadEventLibrary(){
+  const files=await Promise.all(EVENT_FILES.map(async path=>{try{const r=await fetch(path);if(!r.ok)throw Error(r.status);return {path,text:await r.text()};}catch(e){console.warn('Event file unavailable:',path,e);return {path,text:''};}}));
+  for(const file of files) eventLibrary[file.path.includes('silver')?'silver':'rest']=parseEventFile(file.text);
+}
+function eventList(value){if(Array.isArray(value))return value;if(!value||value==='none')return [];return String(value).split(';').map(x=>x.trim()).filter(Boolean);}
+function eventItem(id){return state.inventory.find(x=>x.id===String(id).trim().toLowerCase().replace(/ /g,'_'));}
+function applyEventRewards(value){
+  for(const reward of eventList(value)){const m=String(reward).match(/^([+-])\\s*(\\d+)\\s+([a-z0-9_ -]+)$/i);if(!m)continue;const count=Number(m[2])*(m[1]==='-'?-1:1);const id=m[3].trim().toLowerCase().replace(/ /g,'_');if(!ITEM_DATA[id])continue;
+    if(count>0)addStorageItem(id,count);else for(let n=0;n<Math.abs(count);n++){const item=eventItem(id);if(item)removeInventoryEntry(item.uid);}
+  }
+}
+function applyEventTrigger(value){
+  for(const raw of eventList(value)){const action=String(raw).toLowerCase().trim().replace(/ /g,'_');
+    if(['upgrade_red','upgrade_net'].includes(action)){state.networkBoost=Math.max(state.networkBoost,3);showSurvivalToast('Silver mejoró la red: los próximos 3 lanzamientos darán 2 comidas.');}
+    else if(action==='break_pod')changeHull(-18);
+    else if(action.startsWith('damage_pod_'))changeHull(-Number(action.slice(11))||-10);
+    else if(action.startsWith('repair_pod_'))changeHull(Number(action.slice(11))||10);
+    else if(action==='break_computer')state.computerBroken=true;
+    else if(action==='fix_computer')state.computerBroken=false;
+  } syncHud();saveGame();
+}
+function showDataEvent(event,category){
+  state.pendingEvent={event,category};
+  const chain=eventList(event['event message chain']);
+  $('eventSymbol').textContent=category==='silver'?'S':'✦';
+  $('eventKicker').textContent=category==='silver'?'CANAL PRIVADO · SILVER':'EVENTO NOCTURNO';
+  $('eventTitle').textContent=event['event name'];
+  $('eventDescription').textContent=chain[0]||event['event message']||'Algo sucede en la oscuridad.';
+  const panel=$('eventModal').querySelector('.event-panel');const bg=event['event space background'];
+  panel.style.backgroundImage=bg&&bg!=='none'?'linear-gradient(rgba(7,12,22,.82),rgba(7,12,22,.96)),url("'+bg+'")':'';
+  panel.style.backgroundSize='cover';panel.style.backgroundPosition='center';
+  const root=$('eventChoices');root.innerHTML='';
+  const choices=eventList(event['event choices']);
+  if(!choices.length){
+    addEventChoice(root,'Continuar','',true,()=>{const item=String(event['event use item']||'none').toLowerCase().replace(/ /g,'_');if(item!=='none'){const found=eventItem(item);if(!found){showSurvivalToast('Necesitas '+(ITEM_DATA[item]?.name||item));return;}if(Math.random()*100<clamp(Number(event['event chance consuming item']??100),0,100))removeInventoryEntry(found.uid);}
+      applyEventTrigger(event['event trigger']);applyEventRewards(event['recompensas']||event['event rewards']);finishNight('La noche continúa.');});
+  }else choices.forEach((raw,index)=>{const p=String(raw).split('|').map(x=>x.trim());const label=p[0]||'Opción '+(index+1),trigger=p[1]||'none',item=(p[2]||'none').toLowerCase().replace(/ /g,'_'),chance=Number(p[3]??100),rewards=p[4]||'none',desc=p[5]||'';
+    const available=item==='none'||!!eventItem(item);
+    addEventChoice(root,label,desc,available,()=>{if(item!=='none'&&Math.random()*100<clamp(chance,0,100)){const found=eventItem(item);if(found)removeInventoryEntry(found.uid);}applyEventTrigger(trigger);applyEventRewards(rewards);finishNight(p[6]||'La noche continúa.');},'Necesitas '+item);
+  });
+  showModal('eventModal');
+}
+
 const state = {
   phase: 'title',
   day: 1,
@@ -1301,85 +1360,13 @@ function sleep() {
 
 function triggerNightEvent() {
   playSound('event');
-  const nightEvents = state.companion ? ['alien', 'debris', 'signal', 'leak', 'voice', 'silver'] : ['alien', 'debris', 'signal', 'leak', 'voice'];
-  const event = pick(nightEvents);
-  state.pendingEvent = event;
-  const config = {
-    alien: {
-      symbol: '◉', kicker: 'VISITA INESPERADA', title: 'ALGUIEN EN LA VENTANA',
-      description: 'Te despierta un golpecito suave en el cristal. Afuera hay una figura pequeña, con ojos enormes y una mochila de exploración. Señala tu comida y hace un gesto que parece una pregunta.'
-    },
-    debris: {
-      symbol: '✧', kicker: 'IMPACTO EXTERIOR', title: 'LLUVIA DE ESCOMBROS',
-      description: 'Un fragmento de metal golpea el lateral de la cápsula. Una fisura fina empieza a vibrar junto a la ventana.'
-    },
-    signal: {
-      symbol: '⌁', kicker: 'SEÑAL DESCONOCIDA', title: 'TRES DESTELLOS',
-      description: 'Tres luces aparecen en la oscuridad y desaparecen. Algo parece estar respondiendo a la linterna de la cápsula.'
-    },
-    leak: {
-      symbol: '⚠', kicker: 'ALERTA DE PRESIÓN', title: 'EL AIRE SE ESCAPA',
-      description: 'Un silbido agudo te despierta. Hay una fuga pequeña cerca de una unión del panel. El indicador de presión empieza a bajar.'
-    },
-    voice: {
-      symbol: '♫', kicker: 'FRECUENCIA NO IDENTIFICADA', title: 'UNA CANCIÓN EN EL VACÍO',
-      description: 'Una melodía muy lejana se filtra por los altavoces apagados. La consola muestra un mensaje que no estaba ahí hace un segundo: “¿Pueden oírme?”'
-    },
-    silver: {
-      symbol: '☾', kicker: 'SUEÑO INTERRUMPIDO', title: 'SILVER NO PUEDE DORMIR',
-      description: 'Silver te despierta en voz baja. Dice que vio una sombra pasar frente a la ventana, pero cuando miró de nuevo ya no había nada.'
-    }
-  }[event];
-  $('eventSymbol').textContent = config.symbol;
-  $('eventKicker').textContent = config.kicker;
-  $('eventTitle').textContent = config.title;
-  $('eventDescription').textContent = config.description;
-  const choices = $('eventChoices');
-  choices.innerHTML = '';
-  if (event === 'alien') {
-    addEventChoice(choices, 'Ofrecer una lata de comida', 'Le das una comida enlatada. Quizá solo tenía hambre.', state.inventory.some((entry) => entry.id === 'canned_food'), () => {
-      const food = state.inventory.find((entry) => entry.id === 'canned_food');
-      if (food) removeInventoryEntry(food.uid);
-      finishNight('El visitante acepta la lata, hace una reverencia y se marcha. La noche vuelve a quedar en silencio.');
-    }, 'Necesitas comida enlatada');
-    addEventChoice(choices, 'Seguir durmiendo', 'No sabes qué es. No vas a abrir la cápsula.', true, () => {
-      changeHull(-16);
-      if (state.phase !== 'gameover') finishNight('El visitante se enfadó. Golpeó el casco antes de desaparecer.');
-    });
-  } else if (event === 'debris' || event === 'leak') {
-    addEventChoice(choices, 'Sellar con cinta aislante', 'Usas cinta para contener el daño.', state.inventory.some((entry) => entry.id === 'duct_tape'), () => {
-      const tape = state.inventory.find((entry) => entry.id === 'duct_tape');
-      if (tape) removeInventoryEntry(tape.uid);
-      changeHull(event === 'debris' ? 3 : 5);
-      if (state.phase !== 'gameover') finishNight('La cinta aguantó. No fue elegante, pero funcionó.');
-    }, 'Necesitas cinta aislante');
-    addEventChoice(choices, 'Volver a dormir', 'Ignoras el ruido y esperas que la cápsula aguante.', true, () => {
-      changeHull(event === 'debris' ? -22 : -28);
-      if (state.phase !== 'gameover') finishNight('El daño empeoró mientras dormías. La cápsula sigue funcionando, por poco.');
-    });
-  } else if (event === 'signal') {
-    addEventChoice(choices, 'Encender la linterna', 'Iluminas el exterior para responder a la señal.', state.flashlightOn || state.inventory.some((entry) => entry.id === 'flashlight'), () => {
-      const bonus = Math.random() < 0.5 ? 'battery' : 'star_fragment';
-      addStorageItem(bonus);
-      finishNight('Las luces responden con un patrón. Algo deja un pequeño objeto junto a la ventana y desaparece.');
-    }, 'No tienes una linterna');
-    addEventChoice(choices, 'Ignorar la señal', 'No sabes qué hay ahí fuera.', true, () => finishNight('La señal se apaga sola. No vuelve a ocurrir nada.'));
-  } else if (event === 'voice') {
-    addEventChoice(choices, 'Responder desde la consola', 'Envías un mensaje corto por radio.', true, () => {
-      addStorageItem('data_core');
-      finishNight('La respuesta llega como un pequeño paquete de datos. No hay voz al otro lado.');
-    });
-    addEventChoice(choices, 'Apagar la radio y dormir', 'No quieres saber quién está transmitiendo.', true, () => finishNight('La melodía se desvanece. El resto de la noche pasa en calma.'));
-  } else {
-    addEventChoice(choices, 'Preguntarle qué vio', 'Escuchas a Silver y revisan juntos la ventana.', true, () => {
-      if (Math.random() < 0.5) addStorageItem('star_fragment');
-      finishNight('No encuentran nada. Silver se queda despierto un rato más, acompañándote.');
-    });
-    addEventChoice(choices, 'Decirle que vuelva a dormir', 'Quizá solo fue un reflejo.', true, () => {
-      finishNight('Silver vuelve a su asiento. Poco después, ambos consiguen descansar.');
-    });
-  }
-  showModal('eventModal');
+  const category=state.companion&&eventLibrary.silver.length&&Math.random()<0.45?'silver':'rest';
+  const pool=eventLibrary[category];
+  if(!pool.length){finishNight('Descansaste sin problema.');return;}
+  const weight=pool.map(e=>Math.max(1,Number(e['event weight']||1)));
+  let roll=Math.random()*weight.reduce((a,b)=>a+b,0),chosen=pool[0];
+  for(let i=0;i<pool.length;i++){roll-=weight[i];if(roll<=0){chosen=pool[i];break;}}
+  showDataEvent(chosen,category);
 }
 
 function addEventChoice(root, label, description, enabled, callback, disabledText) {
@@ -1493,6 +1480,7 @@ function bindEvents() {
 }
 
 function boot() {
+  loadEventLibrary();
   initRenderer();
   bindEvents();
   const saved = loadSavedData();
