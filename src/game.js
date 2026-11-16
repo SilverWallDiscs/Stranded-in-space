@@ -29,7 +29,8 @@ const DEFAULT_SHIP_LAYOUT = {
     net: [0, -4.35], repair: [3.15, -0.4], sleep: [-2.9, -0.95],
     locker: [3.0, 4.45], silver: [-2.15, 1.55]
   },
-  podItemPositions: {}
+  podItemPositions: {},
+  podCamera: { position: [0, 5.0, 11.5], lookAt: [0, 1.05, -0.55], fov: 47 }
 };
 function loadShipLayout() {
   try {
@@ -40,7 +41,13 @@ function loadShipLayout() {
       itemPositions: { ...DEFAULT_SHIP_LAYOUT.itemPositions, ...(stored?.itemPositions || {}) },
       extraParts: Array.isArray(stored?.extraParts) ? stored.extraParts : [],
       podStations: { ...DEFAULT_SHIP_LAYOUT.podStations, ...(stored?.podStations || {}) },
-      podItemPositions: { ...DEFAULT_SHIP_LAYOUT.podItemPositions, ...(stored?.podItemPositions || {}) }
+      podItemPositions: { ...DEFAULT_SHIP_LAYOUT.podItemPositions, ...(stored?.podItemPositions || {}) },
+      podCamera: {
+        ...DEFAULT_SHIP_LAYOUT.podCamera,
+        ...(stored?.podCamera || {}),
+        position: stored?.podCamera?.position || DEFAULT_SHIP_LAYOUT.podCamera.position,
+        lookAt: stored?.podCamera?.lookAt || DEFAULT_SHIP_LAYOUT.podCamera.lookAt
+      }
     };
   } catch (_) { return structuredClone(DEFAULT_SHIP_LAYOUT); }
 }
@@ -590,29 +597,21 @@ function createPodZone(target, x, z) {
 }
 
 function makePlaceholderTexture(itemId) {
-  const info = ITEM_DATA[itemId] || { icon: '◉', name: 'Objeto' };
+  // Fallback transparente: nunca dibuja una tarjeta, borde ni nombre bajo el recurso.
+  // Cuando exista assets/items/<id>.png, tryLoadItemPng reemplaza esta textura.
+  const info = ITEM_DATA[itemId] || { icon: '◉' };
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
-  const grad = ctx.createLinearGradient(20, 20, 230, 230);
-  grad.addColorStop(0, '#325264');
-  grad.addColorStop(1, '#101b2a');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.roundRect(16, 16, 224, 224, 38);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(141,231,231,.65)';
-  ctx.lineWidth = 4;
-  ctx.stroke();
-  ctx.fillStyle = '#e4ffff';
-  ctx.font = '100px system-ui, sans-serif';
+  ctx.clearRect(0, 0, 256, 256);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(info.icon || '◉', 128, 117);
-  ctx.fillStyle = 'rgba(220,245,248,.88)';
-  ctx.font = '500 18px Arial';
-  ctx.fillText((info.short || info.name).toUpperCase(), 128, 205);
+  ctx.font = '176px "Segoe UI Emoji", system-ui, sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,.35)';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(info.icon || '◉', 128, 128);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -1203,8 +1202,11 @@ function buildPodInteriorScene() {
   addCeilingLight(scene, 0, 4.8, 0xffdfc5, 1.7, 8, 3.86);
 
   camera = new THREE.PerspectiveCamera(47, window.innerWidth / window.innerHeight, 0.1, 80);
-  podCameraBase.set(0, 5.0, 11.5);
-  podCameraLookAt.set(0, 1.05, -0.55);
+  const podCamera = activeShipLayout.podCamera || DEFAULT_SHIP_LAYOUT.podCamera;
+  podCameraBase.fromArray(podCamera.position || DEFAULT_SHIP_LAYOUT.podCamera.position);
+  podCameraLookAt.fromArray(podCamera.lookAt || DEFAULT_SHIP_LAYOUT.podCamera.lookAt);
+  camera.fov = Number(podCamera.fov) || 47;
+  camera.updateProjectionMatrix();
   camera.position.copy(podCameraBase);
   camera.lookAt(podCameraLookAt);
   playerYaw = 0;
@@ -1547,6 +1549,16 @@ function loadDevSelectionFields() {
   $('devWidth').value = Number(data.width || 1).toFixed(2);
   $('devDepth').value = Number(data.depth || 0.25).toFixed(2);
   $('devHeight').value = Number(data.height || 1).toFixed(2);
+  if (devScopeIsPod()) {
+    const cfg = activeShipLayout.podCamera || DEFAULT_SHIP_LAYOUT.podCamera;
+    $('devCamX').value = Number(cfg.position[0]).toFixed(2);
+    $('devCamY').value = Number(cfg.position[1]).toFixed(2);
+    $('devCamZ').value = Number(cfg.position[2]).toFixed(2);
+    $('devLookX').value = Number(cfg.lookAt[0]).toFixed(2);
+    $('devLookY').value = Number(cfg.lookAt[1]).toFixed(2);
+    $('devLookZ').value = Number(cfg.lookAt[2]).toFixed(2);
+    $('devCamFov').value = String(cfg.fov || 47);
+  }
 }
 
 function applyDevTransform() {
@@ -1592,6 +1604,29 @@ function applyDevTransform() {
   }
   saveShipLayout();
   $('devStatus').textContent = 'Posición aplicada y guardada localmente.';
+}
+
+function applyDevCamera() {
+  if (!devScopeIsPod()) return;
+  const values = ['devCamX','devCamY','devCamZ','devLookX','devLookY','devLookZ','devCamFov'].map((id) => Number($(id).value));
+  if (values.some((value) => !Number.isFinite(value))) {
+    $('devStatus').textContent = 'Introduce valores numéricos válidos para la cámara.';
+    return;
+  }
+  const [x,y,z,lx,ly,lz,fov] = values;
+  activeShipLayout.podCamera = {
+    position: [x,y,z],
+    lookAt: [lx,ly,lz],
+    fov: clamp(fov, 25, 80)
+  };
+  podCameraBase.set(x,y,z);
+  podCameraLookAt.set(lx,ly,lz);
+  camera.fov = activeShipLayout.podCamera.fov;
+  camera.updateProjectionMatrix();
+  camera.position.copy(podCameraBase);
+  camera.lookAt(podCameraLookAt);
+  saveShipLayout();
+  $('devStatus').textContent = 'Cámara fija actualizada y guardada. Se aplica al volver a entrar en la life pod.';
 }
 
 function addDevPart() {
@@ -1709,6 +1744,7 @@ function bindDevEditor() {
   $('devKind').addEventListener('change', () => { devSelectedKey = null; refreshDevObjectOptions(); });
   $('devObject').addEventListener('change', loadDevSelectionFields);
   $('devApply').addEventListener('click', applyDevTransform);
+  $('devApplyCamera').addEventListener('click', applyDevCamera);
   $('devAdd').addEventListener('click', addDevPart);
   $('devRemove').addEventListener('click', removeDevPart);
   $('devExport').addEventListener('click', exportDevLayout);
@@ -2001,7 +2037,10 @@ function updateCinematic(now) {
   cine.ship.rotation.y = -0.13 + Math.sin(elapsed * 0.45) * 0.04;
   if (elapsed > 2.1 && !cine.exploded) {
     cine.exploded = true;
-    cine.flash.material.opacity = 0.92;
+    cine.flash.material.opacity = 1;
+    cine.core.material.opacity = 0.98;
+    cine.blastLight.intensity = 34;
+    cine.blastLight2.intensity = 22;
     playSound('failure');
     $('cinematicTitle').innerHTML = 'NO MIRES<br>ATRÁS';
     $('cinematicText').textContent = 'La nave nodriza ya no existe.';
@@ -2011,8 +2050,13 @@ function updateCinematic(now) {
     }
   }
   if (cine.exploded) {
-    cine.flash.scale.setScalar(1 + elapsed * 1.8);
-    cine.flash.material.opacity = Math.max(0, 0.92 - (elapsed - 2.1) * 0.42);
+    const blastAge = elapsed - 2.1;
+    cine.flash.scale.setScalar(1.2 + blastAge * 3.6);
+    cine.flash.material.opacity = Math.max(0, 1 - blastAge * 0.52);
+    cine.core.scale.setScalar(0.55 + blastAge * 2.7);
+    cine.core.material.opacity = Math.max(0, 0.98 - blastAge * 0.8);
+    cine.blastLight.intensity = Math.max(0, 34 - blastAge * 24);
+    cine.blastLight2.intensity = Math.max(0, 22 - blastAge * 17);
     for (const p of cine.particles) {
       p.position.addScaledVector(p.userData.velocity, 0.016);
       p.scale.multiplyScalar(0.994);
@@ -2365,8 +2409,11 @@ function bindEvents() {
   });
   document.addEventListener('keydown', (event) => {
     if (state.devActive && event.code === 'Escape') { closeDevEditor(); return; }
-    if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
-      event.preventDefault(); openDevCommand(); return;
+    if ((event.key === '/' || event.code === 'F8') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      event.preventDefault();
+      if (event.code === 'F8') openDevEditor();
+      else openDevCommand();
+      return;
     }
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
     if (event.code === 'Escape') {
