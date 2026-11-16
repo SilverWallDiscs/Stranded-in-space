@@ -941,11 +941,17 @@ function buildCinematicScene() {
     debris.add(mesh); particles.push(mesh);
   }
   cineScene.add(debris);
-  const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 24), new THREE.MeshBasicMaterial({ color: 0xffc48e, transparent: true, opacity: 0 }));
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffa85c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   flash.position.set(0, 0, 0); cineScene.add(flash);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 24), new THREE.MeshBasicMaterial({ color: 0xffe6b1, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.position.set(0, 0, 0); cineScene.add(core);
+  const blastLight = new THREE.PointLight(0xff9b52, 0, 95, 1.35);
+  blastLight.position.set(0, 0, 0); cineScene.add(blastLight);
+  const blastLight2 = new THREE.PointLight(0x8bdfff, 0, 65, 1.8);
+  blastLight2.position.set(-1.5, 1.5, 1); cineScene.add(blastLight2);
   const cineCamera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 240);
   cineCamera.position.set(0, 6, 31); cineCamera.lookAt(0, 0, 0);
-  return { scene: cineScene, camera: cineCamera, ship, pod, debris, particles, flash, started: performance.now(), exploded: false };
+  return { scene: cineScene, camera: cineCamera, ship, pod, debris, particles, flash, core, blastLight, blastLight2, started: performance.now(), exploded: false };
 }
 
 function createPodClickTarget(type, data, position, size = [1.2, 1.6], zOffset = 0.28) {
@@ -1290,7 +1296,18 @@ function advanceSilverNight() {
     } else if (state.silverFood < 30) {
       const roll = Math.random();
       if (roll < 0.60) { state.silverSick = true; result = 'Silver lleva demasiado tiempo sin comer y amaneció enferma.'; }
-      else if (roll < 0.80) { state.silverDead = true; state.companion = false; result = 'Silver no sobrevivió a la falta de alimento. Ya no responde.'; }
+      else if (roll < 0.80) {
+        state.silverDead = true;
+        state.companion = false;
+        const silverStation = podStations.find((station) => station.type === 'silver');
+        if (silverStation?.group) scene.remove(silverStation.group);
+        if (silverStation?.target) {
+          scene.remove(silverStation.target);
+          podClickTargets = podClickTargets.filter((target) => target.mesh !== silverStation.target);
+        }
+        $('silverStatusPanel').classList.add('hidden');
+        result = 'Silver no sobrevivió a la falta de alimento. Ya no responde.';
+      }
       else result = 'Silver pasó una noche crítica, pero logró resistir.';
     }
   }
@@ -1309,6 +1326,7 @@ function updateSurvival(delta) {
   camera.lookAt(podCameraLookAt.x + mx * 0.08, podCameraLookAt.y - my * 0.04, podCameraLookAt.z);
   updateSilverHud();
   if (podHovered?.type === 'silver') updateSilverPanel();
+  $('podInteractionHint').classList.add('hidden');
 }
 
 function interactPod() {
