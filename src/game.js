@@ -425,6 +425,10 @@ function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
   }
+  if (devReturnCamera) {
+    devReturnCamera.aspect = window.innerWidth / window.innerHeight;
+    devReturnCamera.updateProjectionMatrix();
+  }
   if (menuCamera) {
     menuCamera.aspect = window.innerWidth / window.innerHeight;
     menuCamera.updateProjectionMatrix();
@@ -1781,6 +1785,7 @@ function openDevEditor() {
   if (state.phase !== 'rescue' && state.phase !== 'survival') return;
   devReturnCamera = camera;
   devCamera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1200);
+  devCamera.rotation.order = 'YXZ';
   if (scene?.userData?.isPod) {
     devCamera.position.set(0, 10, 20);
     devCamera.lookAt(0, 1.1, -0.5);
@@ -1788,7 +1793,6 @@ function openDevEditor() {
     devCamera.position.set(0, 45, 68);
     devCamera.lookAt(0, 0, 0);
   }
-  devCamera.rotation.order = 'YXZ';
   devCameraYaw = devCamera.rotation.y;
   devCameraPitch = devCamera.rotation.x;
   camera = devCamera;
