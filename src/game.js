@@ -20,6 +20,38 @@ const ITEM_DATA = {
 
 const LOOT_TABLE = Object.keys(ITEM_DATA);
 const SAVE_KEY = 'stranded-in-space-save-v1';
+const DEV_LAYOUT_KEY = 'stranded-in-space-layout-v1';
+const DEFAULT_SHIP_LAYOUT = {
+  scale: 1.8,
+  itemPositions: {},
+  extraParts: [],
+  podStations: {
+    net: [0, -4.35], repair: [3.15, -0.4], sleep: [-2.9, -0.95],
+    locker: [3.0, 4.45], silver: [-2.15, 1.55]
+  },
+  podItemPositions: {}
+};
+function loadShipLayout() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DEV_LAYOUT_KEY) || 'null');
+    return {
+      ...structuredClone(DEFAULT_SHIP_LAYOUT),
+      ...(stored || {}),
+      itemPositions: { ...DEFAULT_SHIP_LAYOUT.itemPositions, ...(stored?.itemPositions || {}) },
+      extraParts: Array.isArray(stored?.extraParts) ? stored.extraParts : [],
+      podStations: { ...DEFAULT_SHIP_LAYOUT.podStations, ...(stored?.podStations || {}) },
+      podItemPositions: { ...DEFAULT_SHIP_LAYOUT.podItemPositions, ...(stored?.podItemPositions || {}) }
+    };
+  } catch (_) { return structuredClone(DEFAULT_SHIP_LAYOUT); }
+}
+let activeShipLayout = loadShipLayout();
+function saveShipLayout() {
+  try { localStorage.setItem(DEV_LAYOUT_KEY, JSON.stringify(activeShipLayout)); return true; }
+  catch (_) { return false; }
+}
+function getPodStationPosition(key, fallback) {
+  return activeShipLayout.podStations?.[key] || fallback;
+}
 
 const EVENT_FILES = ['./events/rest.txt', './events/silver.txt'];
 let eventLibrary = { rest: [], silver: [] };
@@ -280,6 +312,11 @@ const state = {
   repairStep: 0,
   pendingEvent: null,
   sleeping: false,
+  silverFood: 100,
+  silverSick: false,
+  silverInjured: false,
+  silverDead: false,
+  devActive: false,
   toastTimer: null
 };
 
@@ -306,6 +343,15 @@ let podInventoryObjects = [];
 let podNearby = null;
 let podNetRunning = false;
 let podNetLight = null;
+let podClickTargets = [];
+let podRaycaster = null;
+let podMouseNdc = new THREE.Vector2(0, 0);
+let podMouseClient = { x: 0, y: 0 };
+let podHovered = null;
+let podCameraBase = new THREE.Vector3(0, 5.0, 11.5);
+let podCameraLookAt = new THREE.Vector3(0, 1.0, -0.6);
+let devPartObjects = [];
+let devSelectedKey = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -326,16 +372,23 @@ function initRenderer() {
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = document.pointerLockElement === $('world');
   });
-  $('world').addEventListener('click', () => {
-    if ((state.phase === 'rescue' || state.phase === 'survival') && !state.paused && !pointerLocked && $('titleScreen').classList.contains('hidden')) {
+  podRaycaster = new THREE.Raycaster();
+  $('world').addEventListener('click', (event) => {
+    if (state.phase === 'survival' && !state.devActive && !state.paused) {
+      clickPodTarget(event);
+      return;
+    }
+    if (state.phase === 'rescue' && !state.devActive && !state.paused && !pointerLocked && $('titleScreen').classList.contains('hidden')) {
       $('world').requestPointerLock?.();
     }
   });
   document.addEventListener('mousemove', (event) => {
-    if (pointerLocked && (state.phase === 'rescue' || state.phase === 'survival') && !state.paused) {
+    if (pointerLocked && state.phase === 'rescue' && !state.paused && !state.devActive) {
       playerYaw -= event.movementX * 0.0021;
       playerPitch = clamp(playerPitch - event.movementY * 0.0017, -0.92, 0.92);
       camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
+    } else if (state.phase === 'survival' && !state.paused && !state.devActive) {
+      updatePodAim(event);
     }
   });
 }
@@ -669,10 +722,24 @@ function createPhysicalItemModel(itemId) {
 }
 
 function createWorldItem(itemId, position) {
-  const group = createPhysicalItemModel(itemId);
+  // Recurso PNG transparente, apoyado en el suelo y sin pedestal ni halo.
+  const group = new THREE.Group();
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.36, 24),
+    new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.3, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  group.add(shadow);
+  const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
+  tryLoadItemPng(itemId, material);
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.05, 1.05, 1);
+  sprite.position.y = 0.76;
+  group.add(sprite);
   group.position.set(position[0], 0, position[1]);
   scene.add(group);
-  const obj = { id: itemId, group, position: new THREE.Vector3(position[0], 0, position[1]), taken: false };
+  const obj = { id: itemId, group, sprite, position: new THREE.Vector3(position[0], 0, position[1]), taken: false };
   interactables.push(obj);
   return obj;
 }
@@ -689,12 +756,17 @@ function addShipProp(target, x, z, width = 1.2, height = 1.5) {
 }
 
 function buildRescueScene() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x122335);
-  scene.fog = new THREE.Fog(0x172a3b, 25, 54);
-  addStarfield(scene, 340, 72);
+  const gameScene = new THREE.Scene();
+  gameScene.background = new THREE.Color(0x122335);
+  gameScene.fog = new THREE.Fog(0x172a3b, 36, 78);
+  const worldRoot = new THREE.Group();
+  worldRoot.scale.setScalar(activeShipLayout.scale || 1.8);
+  gameScene.add(worldRoot);
+  scene = worldRoot;
+  addStarfield(scene, 520, 72);
   makeRoomLights(scene);
   rescueColliders = [];
+  devPartObjects = [];
 
   const floorMat = new THREE.MeshStandardMaterial({ color: 0x334b5b, metalness: 0.42, roughness: 0.66 });
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x304858, metalness: 0.55, roughness: 0.5 });
@@ -777,17 +849,24 @@ function buildRescueScene() {
     ['flashlight', [-4.35, -6.2]], ['star_fragment', [4.45, -6.25]],
     ['silver', [-5.1, -4.65]]
   ];
-  for (const [id, pos] of spawns) {
+  for (const [id, fallbackPos] of spawns) {
+    const pos = activeShipLayout.itemPositions?.[id] || fallbackPos;
     if (id === 'silver') createCharacterSprite('silver', pos);
     else createWorldItem(id, pos);
   }
+  (activeShipLayout.extraParts || []).forEach((part, index) => buildDevPartObject(part, index));
 
   scene.userData.podPosition = new THREE.Vector3(0, 0, -6.35);
-  camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.1, 90);
-  camera.position.set(0, 1.65, 8.55);
+  const rescueCamera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.1, 90);
+  rescueCamera.position.set(0, 1.65, 8.55);
   playerYaw = 0;
   playerPitch = 0;
-  camera.rotation.set(0, playerYaw, 0, 'YXZ');
+  rescueCamera.rotation.set(0, playerYaw, 0, 'YXZ');
+  worldRoot.add(rescueCamera);
+  gameScene.userData.podPosition = scene.userData.podPosition.clone();
+  gameScene.userData.rescueRoot = worldRoot;
+  scene = gameScene;
+  camera = rescueCamera;
 }
 
 function createCharacterSprite(characterId, position) {
@@ -822,6 +901,7 @@ function createCharacterSprite(characterId, position) {
   group.position.set(position[0], 0, position[1]);
   scene.add(group);
   interactables.push({ id: characterId, group, sprite, position: new THREE.Vector3(position[0], 0, position[1]), taken: false });
+  return group;
 }
 
 function buildCinematicScene() {
