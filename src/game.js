@@ -23,6 +23,7 @@ const SAVE_KEY = 'stranded-in-space-save-v1';
 const DEV_LAYOUT_KEY = 'stranded-in-space-layout-v1';
 const DEFAULT_SHIP_LAYOUT = {
   scale: 2.4,
+  shipDimensions: { width: 14, length: 20 },
   itemPositions: {},
   extraParts: [],
   podStations: {
@@ -39,6 +40,7 @@ function loadShipLayout() {
       ...structuredClone(DEFAULT_SHIP_LAYOUT),
       ...(stored || {}),
       scale: stored?.scale && stored.scale !== 1.8 ? stored.scale : DEFAULT_SHIP_LAYOUT.scale,
+      shipDimensions: { ...DEFAULT_SHIP_LAYOUT.shipDimensions, ...(stored?.shipDimensions || {}) },
       itemPositions: { ...DEFAULT_SHIP_LAYOUT.itemPositions, ...(stored?.itemPositions || {}) },
       extraParts: Array.isArray(stored?.extraParts) ? stored.extraParts : [],
       podStations: { ...DEFAULT_SHIP_LAYOUT.podStations, ...(stored?.podStations || {}) },
@@ -360,6 +362,13 @@ let podCameraBase = new THREE.Vector3(0, 5.0, 11.5);
 let podCameraLookAt = new THREE.Vector3(0, 1.0, -0.6);
 let devPartObjects = [];
 let devSelectedKey = null;
+let devCamera = null;
+let devReturnCamera = null;
+let devCameraYaw = 0;
+let devCameraPitch = 0;
+let devMouseCaptured = false;
+let devKeys = {};
+let devFlySpeed = 18;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -379,6 +388,10 @@ function initRenderer() {
   window.addEventListener('resize', onResize);
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = document.pointerLockElement === $('world');
+    if (state.devActive) {
+      devMouseCaptured = pointerLocked;
+      updateDevMouseStatus();
+    }
   });
   podRaycaster = new THREE.Raycaster();
   $('world').addEventListener('click', (event) => {
@@ -391,7 +404,11 @@ function initRenderer() {
     }
   });
   document.addEventListener('mousemove', (event) => {
-    if (pointerLocked && state.phase === 'rescue' && !state.paused && !state.devActive) {
+    if (state.devActive && devMouseCaptured && pointerLocked && devCamera) {
+      devCameraYaw -= event.movementX * 0.0022;
+      devCameraPitch = clamp(devCameraPitch - event.movementY * 0.0020, -1.48, 1.48);
+      devCamera.rotation.set(devCameraPitch, devCameraYaw, 0, 'YXZ');
+    } else if (pointerLocked && state.phase === 'rescue' && !state.paused && !state.devActive) {
       playerYaw -= event.movementX * 0.0021;
       playerPitch = clamp(playerPitch - event.movementY * 0.0017, -0.92, 0.92);
       camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
@@ -727,8 +744,8 @@ function createWorldItem(itemId, position) {
   const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
   tryLoadItemPng(itemId, material);
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(1.05, 1.05, 1);
-  sprite.position.y = 0.76;
+  sprite.scale.set(0.54, 0.54, 1);
+  sprite.position.y = 0.32;
   group.add(sprite);
   group.position.set(position[0], 0, position[1]);
   scene.add(group);
@@ -753,7 +770,10 @@ function buildRescueScene() {
   gameScene.background = new THREE.Color(0x122335);
   gameScene.fog = new THREE.Fog(0x172a3b, 36, 78);
   const worldRoot = new THREE.Group();
-  worldRoot.scale.setScalar(activeShipLayout.scale || 1.8);
+  const shipWidth = clamp(Number(activeShipLayout.shipDimensions?.width) || 14, 14, 70);
+  const shipLength = clamp(Number(activeShipLayout.shipDimensions?.length) || 20, 20, 90);
+  const shipScale = Number(activeShipLayout.scale) || 2.4;
+  worldRoot.scale.set(shipScale * (shipWidth / 14), shipScale, shipScale * (shipLength / 20));
   gameScene.add(worldRoot);
   scene = worldRoot;
   addStarfield(scene, 520, 72);
@@ -1080,8 +1100,8 @@ function createPodPngItem(itemId) {
   const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
   tryLoadItemPng(itemId, material);
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(0.82, 0.82, 1);
-  sprite.position.y = 0.62;
+  sprite.scale.set(0.43, 0.43, 1);
+  sprite.position.y = 0.24;
   group.add(sprite);
   return group;
 }
@@ -1583,6 +1603,10 @@ function loadDevSelectionFields() {
     $('devLookZ').value = Number(cfg.lookAt[2]).toFixed(2);
     $('devCamFov').value = String(cfg.fov || 47);
   }
+  if (!devScopeIsPod()) {
+    $('devShipWidth').value = String(activeShipLayout.shipDimensions?.width || 14);
+    $('devShipLength').value = String(activeShipLayout.shipDimensions?.length || 20);
+  }
 }
 
 function applyDevTransform() {
@@ -1628,6 +1652,26 @@ function applyDevTransform() {
   }
   saveShipLayout();
   $('devStatus').textContent = 'Posición aplicada y guardada localmente.';
+}
+
+function applyDevShipDimensions() {
+  if (devScopeIsPod()) return;
+  const width = Number($('devShipWidth').value);
+  const length = Number($('devShipLength').value);
+  if (!Number.isFinite(width) || !Number.isFinite(length)) {
+    $('devStatus').textContent = 'Introduce un ancho y largo válidos.';
+    return;
+  }
+  activeShipLayout.shipDimensions = { width: clamp(width, 14, 70), length: clamp(length, 20, 90) };
+  const root = scene?.userData?.rescueRoot;
+  if (root) {
+    const scale = Number(activeShipLayout.scale) || 2.4;
+    root.scale.set(scale * (activeShipLayout.shipDimensions.width / 14), scale, scale * (activeShipLayout.shipDimensions.length / 20));
+  }
+  $('devShipWidth').value = String(activeShipLayout.shipDimensions.width);
+  $('devShipLength').value = String(activeShipLayout.shipDimensions.length);
+  saveShipLayout();
+  $('devStatus').textContent = 'Casco exterior ampliado. Ancho y largo guardados.';
 }
 
 function applyDevCamera() {
@@ -1723,6 +1767,7 @@ function resetDevLayout() {
 
 let devReturnPhase = null;
 function openDevEditor() {
+  if (state.devActive) return;
   if (state.phase === 'title' || state.phase === 'gameover' || state.phase === 'cinematic') {
     devReturnPhase = state.phase;
     state.phase = 'rescue';
@@ -1732,16 +1777,38 @@ function openDevEditor() {
     $('gameOverScreen').classList.add('hidden');
   }
   if (state.phase !== 'rescue' && state.phase !== 'survival') return;
+  devReturnCamera = camera;
+  devCamera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1200);
+  if (scene?.userData?.isPod) {
+    devCamera.position.set(0, 10, 20);
+    devCamera.lookAt(0, 1.1, -0.5);
+  } else {
+    devCamera.position.set(0, 45, 68);
+    devCamera.lookAt(0, 0, 0);
+  }
+  devCamera.rotation.order = 'YXZ';
+  devCameraYaw = devCamera.rotation.y;
+  devCameraPitch = devCamera.rotation.x;
+  camera = devCamera;
+  devKeys = {};
   state.devActive = true;
+  devMouseCaptured = false;
   if (document.pointerLockElement) document.exitPointerLock();
   $('devPanel').classList.remove('hidden');
   refreshDevObjectOptions();
+  updateDevMouseStatus();
   $('devStatus').textContent = devScopeIsPod()
     ? 'Edita la posición de estaciones y recursos de la life pod.'
     : 'Edita la nave: puedes mover recursos y añadir paredes y suelos.';
 }
 
 function closeDevEditor() {
+  if (document.pointerLockElement) document.exitPointerLock();
+  if (devReturnCamera) camera = devReturnCamera;
+  devCamera = null;
+  devReturnCamera = null;
+  devKeys = {};
+  devMouseCaptured = false;
   $('devPanel').classList.add('hidden');
   state.devActive = false;
   if (devReturnPhase === 'title') {
@@ -1754,6 +1821,41 @@ function closeDevEditor() {
     state.phase = 'gameover';
     setInterface('gameover');
   } else if (devReturnPhase === 'cinematic') devReturnPhase = null;
+}
+
+function updateDevMouseStatus() {
+  const status = $('devMouseStatus');
+  const button = $('devMouseToggle');
+  if (!status || !button) return;
+  status.textContent = devMouseCaptured ? 'RATÓN CAPTURADO · FLY CAM' : 'RATÓN LIBRE · EDITOR';
+  button.textContent = devMouseCaptured ? 'F9 · Liberar ratón' : 'F9 · Capturar ratón';
+  button.classList.toggle('is-active', devMouseCaptured);
+}
+
+function toggleDevMouseCapture() {
+  if (!state.devActive) return;
+  if (document.pointerLockElement === $('world')) document.exitPointerLock();
+  else $('world').requestPointerLock?.();
+}
+
+function updateDevCamera(delta) {
+  if (!state.devActive || !devCamera) return;
+  const forward = new THREE.Vector3();
+  devCamera.getWorldDirection(forward);
+  const right = new THREE.Vector3().crossVectors(forward, devCamera.up).normalize().multiplyScalar(-1);
+  const move = new THREE.Vector3();
+  if (devKeys.KeyW || devKeys.ArrowUp) move.add(forward);
+  if (devKeys.KeyS || devKeys.ArrowDown) move.sub(forward);
+  if (devKeys.KeyD || devKeys.ArrowRight) move.add(right);
+  if (devKeys.KeyA || devKeys.ArrowLeft) move.sub(right);
+  if (devKeys.Space || devKeys.KeyE) move.y += 1;
+  if (devKeys.KeyQ || devKeys.ControlLeft || devKeys.ControlRight) move.y -= 1;
+  if (move.lengthSq() > 0) {
+    const boost = devKeys.ShiftLeft || devKeys.ShiftRight ? 3.5 : 1;
+    const slow = devKeys.AltLeft || devKeys.AltRight ? 0.25 : 1;
+    move.normalize().multiplyScalar(devFlySpeed * boost * slow * delta);
+    devCamera.position.add(move);
+  }
 }
 
 function openDevCommand() {
@@ -1769,6 +1871,8 @@ function bindDevEditor() {
   $('devObject').addEventListener('change', loadDevSelectionFields);
   $('devApply').addEventListener('click', applyDevTransform);
   $('devApplyCamera').addEventListener('click', applyDevCamera);
+  $('devApplyShipDimensions').addEventListener('click', applyDevShipDimensions);
+  $('devMouseToggle').addEventListener('click', toggleDevMouseCapture);
   $('devAdd').addEventListener('click', addDevPart);
   $('devRemove').addEventListener('click', removeDevPart);
   $('devExport').addEventListener('click', exportDevLayout);
@@ -2386,7 +2490,10 @@ function animate(now) {
   requestAnimationFrame(animate);
   const delta = Math.min((now - lastFrame) / 1000, 0.05);
   lastFrame = now;
-  if (state.phase === 'title') {
+  if (state.devActive) {
+    updateDevCamera(delta);
+    renderer.render(scene, devCamera || camera);
+  } else if (state.phase === 'title') {
     if (menuScene && menuScene.children[3]) menuScene.children[3].rotation.y += delta * 0.018;
     renderer.render(scene, camera);
   } else if (state.phase === 'rescue') {
@@ -2432,7 +2539,23 @@ function bindEvents() {
     button.addEventListener('click', () => hideModal(button.dataset.close));
   });
   document.addEventListener('keydown', (event) => {
-    if (state.devActive && event.code === 'Escape') { closeDevEditor(); return; }
+    if (state.devActive && event.code === 'F9') {
+      event.preventDefault();
+      toggleDevMouseCapture();
+      return;
+    }
+    if (state.devActive && event.code === 'Escape') {
+      if (document.pointerLockElement === $('world')) document.exitPointerLock();
+      else closeDevEditor();
+      return;
+    }
+    if (state.devActive && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      if (['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','AltLeft','AltRight','ControlLeft','ControlRight'].includes(event.code)) {
+        devKeys[event.code] = true;
+        event.preventDefault();
+      }
+      return;
+    }
     if ((event.key === '/' || event.code === 'F8') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
       event.preventDefault();
       if (event.code === 'F8') openDevEditor();
@@ -2454,8 +2577,11 @@ function bindEvents() {
       }
     }
   });
-  document.addEventListener('keyup', (event) => { keys[event.code] = false; });
-  window.addEventListener('blur', () => { keys = {}; });
+  document.addEventListener('keyup', (event) => {
+    keys[event.code] = false;
+    devKeys[event.code] = false;
+  });
+  window.addEventListener('blur', () => { keys = {}; devKeys = {}; });
 }
 
 function boot() {
