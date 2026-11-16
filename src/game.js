@@ -775,7 +775,7 @@ function buildRescueScene() {
     ['pill', [-4.35, 0.0]], ['medkit', [-5.1, -1.35]],
     ['computer', [4.4, 0.0]], ['data_core', [5.0, -1.35]],
     ['flashlight', [-4.35, -6.2]], ['star_fragment', [4.45, -6.25]],
-    ['silver', [5.05, -4.65]]
+    ['silver', [-5.1, -4.65]]
   ];
   for (const [id, pos] of spawns) {
     if (id === 'silver') createCharacterSprite('silver', pos);
