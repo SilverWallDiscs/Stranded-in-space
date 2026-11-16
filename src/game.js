@@ -905,8 +905,8 @@ function createPodStation(type, position) {
 }
 
 function getPodItemPosition(index) {
-  const columns = [-2.35, -1.05, 1.05, 2.35];
-  const rows = [0.65, 1.75, 2.85, 3.95];
+  const columns = [-1.5, -0.5, 0.5, 1.5];
+  const rows = [4.4, 3.35, 2.3, 1.25];
   return [columns[index % columns.length], rows[Math.floor(index / columns.length) % rows.length]];
 }
 
@@ -976,7 +976,12 @@ function buildPodInteriorScene() {
   podNetLight.position.set(0, 1.8, -4.3); scene.add(podNetLight);
   createPodStation('repair', [3.15, 0, -0.4]);
   createPodStation('sleep', [-2.9, 0, -0.95]);
-  createPodStation('counter', [2.6, 0, 4.15]);
+  const storageLocker = new THREE.Group();
+  addBox(storageLocker, [0, 0.88, 0], [1.15, 1.76, 0.78], wallMat);
+  addBox(storageLocker, [0, 0.88, 0.41], [0.9, 1.38, 0.045], darkMat);
+  addBox(storageLocker, [0, 1.7, 0.44], [0.36, 0.05, 0.04], trimMat);
+  storageLocker.position.set(3.0, 0, 4.45);
+  scene.add(storageLocker);
   addBox(scene, [-3.68, 2.1, -1.2], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0xffd2a5 }));
   addBox(scene, [3.68, 2.1, 2.9], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0x8de7e7 }));
 
@@ -993,7 +998,7 @@ function buildPodInteriorScene() {
   camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 80);
   camera.position.set(0, 1.65, 5.55);
   playerYaw = 0;
-  playerPitch = -0.08;
+  playerPitch = -0.14;
   camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
   renderPodInventory();
 }
@@ -1044,7 +1049,6 @@ function updateSurvival(delta) {
       repair: 'REPARAR EL CASCO',
       sleep: 'DESCANSAR',
       silver: 'HABLAR CON SILVER',
-      counter: 'ALMACENAMIENTO'
     };
     label = labels[nearest.data.type] || 'INTERACTUAR';
   }
@@ -1061,7 +1065,6 @@ function interactPod() {
     case 'repair': repairPodAtStation(); break;
     case 'sleep': sleep(); break;
     case 'silver': talkToSilver(); break;
-    case 'counter': showSurvivalToast('Tus objetos están aquí, a la vista y al alcance.'); break;
   }
 }
 
@@ -1179,11 +1182,11 @@ function showRescueNotice(message) {
   setTimeout(() => node.classList.add('hidden'), 1900);
 }
 
-function showSurvivalToast(message) {
+function showSurvivalToast(message, duration = 2600) {
   const node = $('survivalToast');
   node.textContent = message;
   node.classList.remove('hidden');
-  setTimeout(() => node.classList.add('hidden'), 2600);
+  setTimeout(() => node.classList.add('hidden'), duration);
 }
 
 function showModal(id) { $(id).classList.remove('hidden'); }
