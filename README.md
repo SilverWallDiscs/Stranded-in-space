@@ -22,9 +22,10 @@ Three.js is loaded from jsDelivr through an import map. No bundler or npm instal
 - Reach the glowing zone beside the escape pod before the 60-second countdown ends.
 
 ### Survival
-- Use the right-side action panel to cast the space net, repair the hull, talk to Silver, or sleep.
-- Actions that require effort cost energy. Resting advances the day and restores a little energy.
-- Select an item in storage to use it.
+- The life pod uses a fixed semi-3D camera with subtle mouse parallax, not free first-person movement.
+- Click the net, repair station, bunk, Silver or a stored item from a distance. The cursor prompt describes the action and its energy cost.
+- Hover Silver to open the care panel; food, medkits and pills are used from there.
+- Resting advances the day and shows a brief black day-title transition.
 
 ## Current prototype features
 
@@ -59,7 +60,7 @@ Los archivos usan bloques `[EVENT]`, `[MESSAGE]` y `[CHOICE]`. Cada campo ocupa 
 
 The evacuation ship is divided into six rooms: galley, cargo bay, medical bay, engineering, crew quarters and auxiliary storage. Pickups are low-poly 3D objects placed on the floor in their assigned rooms, not floating icons.
 
-After escape, the life pod is explored in first person. Stored items are physically displayed on the floor; use `E` when standing close to an item or station. The net uses `E` at its winch, and `SHIFT + E` connects a battery. The repair panel, bunk and Silver are also interacted with in the room. The survival HUD only shows hull, energy and day.
+After escape, the life pod is shown from a fixed semi-3D camera with mouse parallax. Click visible items and stations to interact with them at a distance. The cursor prompt displays the action and energy cost.
 
 
 ## Developer editor
