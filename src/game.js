@@ -1531,6 +1531,7 @@ function refreshDevObjectOptions() {
   select.innerHTML = '';
   if (scopePod) {
     $('devCameraEditor').classList.remove('hidden');
+    $('devShipEditor').classList.add('hidden');
     $('devScopeLabel').textContent = 'Life pod · mueve estaciones y recursos guardados en la vista semi-3D. Los cambios se guardan en este navegador.';
     $('devKind').disabled = true;
     for (const station of podStations) {
@@ -1545,7 +1546,8 @@ function refreshDevObjectOptions() {
     }
   } else {
     $('devCameraEditor').classList.add('hidden');
-    $('devScopeLabel').textContent = 'Nave de evacuación · mueve recursos o añade paredes y suelos. Las paredes nuevas también bloquean el paso.';
+    $('devShipEditor').classList.remove('hidden');
+    $('devScopeLabel').textContent = 'Nave de evacuación · vuela libremente con la cámara DEV, mueve recursos y añade paredes y suelos.';
     $('devKind').disabled = false;
     if (kind === 'item') {
       for (const item of interactables) {
@@ -1739,8 +1741,8 @@ function exportDevLayout() {
   link.href = url;
   link.download = 'stranded-in-space-layout.json';
   link.click();
-  URL.revokeObjectURL(url);
-  $('devStatus').textContent = 'JSON exportado. Envíame ese archivo y lo dejaré como diseño predeterminado del repositorio.';
+  setTimeout(() => URL.revokeObjectURL(url), 1200);
+  $('devStatus').textContent = 'JSON exportado a Descargas como stranded-in-space-layout.json. Envíame ese archivo.';
 }
 
 function rebuildDevPreview() {
