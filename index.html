@@ -108,10 +108,25 @@
           <div id="energyPips" class="energy-pips"></div>
           <b id="energyLabel">4 / 4</b>
         </div>
+        <div id="silverHungerReadout" class="pod-status-block silver-hunger-readout hidden">
+          <span>COMIDA · SILVER</span>
+          <b id="silverHungerLabel">POCA HAMBRE</b>
+          <div class="hull-track"><div id="silverFoodFill" class="silver-food-fill"></div></div>
+        </div>
         <strong class="pod-day">DÍA <span id="dayNumber">01</span></strong>
       </div>
       <div id="podInteractionHint" class="pod-interaction-hint hidden"><kbd>E</kbd><span>INTERACTUAR</span></div>
-      <div class="bottom-hint survival-controls"><kbd>W A S D</kbd> MOVERSE <span>·</span> <kbd>RATÓN</kbd> MIRAR <span>·</span> <kbd>E</kbd> USAR <span>·</span> <kbd>SHIFT + E</kbd> BATERÍA <span>·</span> <kbd>ESC</kbd> PAUSA</div>
+      <div id="podCursorHint" class="pod-cursor-hint hidden"><b id="podCursorTitle"></b><small id="podCursorAction"></small></div>
+      <section id="silverStatusPanel" class="silver-status-panel hidden">
+        <div class="silver-panel-head"><span class="silver-avatar">S</span><div><b>SILVER</b><small id="silverMoodText">Feliz</small></div><span id="silverHungerText" class="silver-hunger-tag">POCA HAMBRE</span></div>
+        <div class="silver-food-track"><div id="silverPanelFoodFill"></div></div>
+        <div class="silver-care-actions">
+          <button id="silverFeedButton" type="button">🥫 Dar comida <small>+35</small></button>
+          <button id="silverMedkitButton" type="button">🧰 Curar daño <small>Kit médico</small></button>
+          <button id="silverPillButton" type="button">💊 Tratar enfermedad <small>Pastilla</small></button>
+        </div>
+      </section>
+      <div class="bottom-hint survival-controls"><span>RATÓN · MIRAR</span><span>·</span><span>CLIC · INTERACTUAR</span><span>·</span><kbd>ESC</kbd> PAUSA</div>
       <div id="survivalToast" class="survival-toast hidden"></div>
       <span id="storageCount" class="hidden">0 ITEMS</span>
       <span id="dayCaption" class="hidden">A la deriva.</span>
@@ -125,6 +140,38 @@
     </section>
 
 
+
+    <section id="dayTransition" class="day-transition hidden">
+      <div class="day-transition-icon">✳</div>
+      <div class="day-transition-kicker">CICLO DE DESCANSO COMPLETADO</div>
+      <div id="dayTransitionTitle" class="day-transition-title">DÍA 02</div>
+      <p>Una nueva jornada entre las estrellas.</p>
+    </section>
+
+    <section id="devPanel" class="dev-panel hidden">
+      <div class="dev-panel-top"><div><span class="dev-kicker">HERRAMIENTAS DE DESARROLLO</span><h2>EDITOR DE ESCENARIO</h2></div><button id="devClose" type="button" aria-label="Cerrar editor">×</button></div>
+      <p id="devScopeLabel" class="dev-description">Editando la nave de evacuación. Las medidas se expresan en unidades del mundo.</p>
+      <div class="dev-field-grid">
+        <label>ELEMENTO<select id="devKind"><option value="item">Recurso</option><option value="wall">Pared nueva</option><option value="floor">Suelo nuevo</option></select></label>
+        <label>OBJETO<select id="devObject"></select></label>
+        <label>X<input id="devX" type="number" step="0.1" value="0"></label>
+        <label>Z<input id="devZ" type="number" step="0.1" value="0"></label>
+        <label>ANCHO<input id="devWidth" type="number" min="0.1" step="0.1" value="2"></label>
+        <label>FONDO<input id="devDepth" type="number" min="0.1" step="0.1" value="0.25"></label>
+        <label>ALTO<input id="devHeight" type="number" min="0.1" step="0.1" value="3"></label>
+      </div>
+      <div class="dev-actions">
+        <button id="devAdd" type="button">＋ Añadir pared / suelo</button>
+        <button id="devApply" type="button">Aplicar posición</button>
+        <button id="devRemove" type="button">Eliminar pieza</button>
+      </div>
+      <div class="dev-actions dev-actions-secondary">
+        <button id="devExport" type="button">Exportar diseño JSON</button>
+        <button id="devReset" type="button">Restaurar diseño base</button>
+      </div>
+      <div id="devStatus" class="dev-status">Los cambios se guardan localmente en este navegador.</div>
+      <div class="dev-footer"><kbd>/dev</kbd> abrir · <kbd>ESC</kbd> cerrar · Exporta el JSON y envíamelo para fijarlo como diseño predeterminado.</div>
+    </section>
 
     <section id="eventModal" class="modal-screen hidden">
       <div class="modal-panel event-panel">
@@ -161,6 +208,7 @@
       <button id="retryButton" class="button button-primary">VOLVER A INTENTARLO ↗</button>
     </section>
   </main>
+  <div id="devCommandShell" class="dev-command-shell hidden"><label for="devCommandInput">COMANDO</label><input id="devCommandInput" autocomplete="off" spellcheck="false" value="/"><small>Escribe <b>/dev</b> y pulsa Enter</small></div>
   <div id="toast" class="toast hidden"></div>
   <script type="module" src="./src/game.js"></script>
 </body>
