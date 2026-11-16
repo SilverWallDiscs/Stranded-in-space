@@ -985,23 +985,43 @@ function createPodStation(type, position) {
   return group;
 }
 
-function getPodItemPosition(index) {
+function getPodItemPosition(index, uid) {
   const columns = [-1.5, -0.5, 0.5, 1.5];
   const rows = [4.4, 3.35, 2.3, 1.25];
-  return [columns[index % columns.length], rows[Math.floor(index / columns.length) % rows.length]];
+  return activeShipLayout.podItemPositions?.[uid] || [columns[index % columns.length], rows[Math.floor(index / columns.length) % rows.length]];
+}
+
+function createPodPngItem(itemId) {
+  const group = new THREE.Group();
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.3, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.018;
+  group.add(shadow);
+  const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
+  tryLoadItemPng(itemId, material);
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.82, 0.82, 1);
+  sprite.position.y = 0.62;
+  group.add(sprite);
+  return group;
 }
 
 function renderPodInventory() {
-  for (const object of podInventoryObjects) scene.remove(object.group);
+  for (const object of podInventoryObjects) {
+    scene.remove(object.group);
+    if (object.target) { scene.remove(object.target); podClickTargets = podClickTargets.filter((target) => target.mesh !== object.target); }
+  }
   podInventoryObjects = [];
   if (!scene?.userData?.isPod) return;
   state.inventory.forEach((entry, index) => {
     if (!ITEM_DATA[entry.id]) return;
-    const group = createPhysicalItemModel(entry.id);
-    const [x, z] = getPodItemPosition(index);
+    const group = createPodPngItem(entry.id);
+    const [x, z] = getPodItemPosition(index, entry.uid);
     group.position.set(x, 0, z);
     scene.add(group);
-    podInventoryObjects.push({ uid: entry.uid, id: entry.id, group, position: new THREE.Vector3(x, 0, z) });
+    const object = { uid: entry.uid, id: entry.id, group, position: new THREE.Vector3(x, 0, z) };
+    object.target = createPodClickTarget('item', object, object.position, [0.98, 1.25], 0.12);
+    podInventoryObjects.push(object);
   });
 }
 
@@ -1031,6 +1051,8 @@ function buildPodInteriorScene() {
   podColliders = [];
   podInventoryObjects = [];
   podNearby = null;
+  podHovered = null;
+  podClickTargets = [];
   podNetRunning = false;
   interactables = [];
 
@@ -1072,27 +1094,36 @@ function buildPodInteriorScene() {
     star.position.set(random(-1.3, 1.3), random(1.1, 3.1), -7); scene.add(star);
   }
 
-  createPodStation('net', [0, 0, -4.35]);
-  addPodBlocker(0, -4.35, 1.85, 1.15);
+  const netPos = getPodStationPosition('net', [0, -4.35]);
+  createPodStation('net', [netPos[0], 0, netPos[1]]);
+  addPodBlocker(netPos[0], netPos[1], 1.85, 1.15);
   podNetLight = new THREE.PointLight(0x8de7e7, 1.8, 5);
-  podNetLight.position.set(0, 1.8, -4.3); scene.add(podNetLight);
-  createPodStation('repair', [3.15, 0, -0.4]);
-  addPodBlocker(3.15, -0.4, 0.48, 1.35);
-  createPodStation('sleep', [-2.9, 0, -0.95]);
-  addPodBlocker(-2.9, -0.95, 1.9, 3.35);
+  podNetLight.position.set(netPos[0], 1.8, netPos[1] + 0.05); scene.add(podNetLight);
+  const repairPos = getPodStationPosition('repair', [3.15, -0.4]);
+  createPodStation('repair', [repairPos[0], 0, repairPos[1]]);
+  addPodBlocker(repairPos[0], repairPos[1], 0.48, 1.35);
+  const sleepPos = getPodStationPosition('sleep', [-2.9, -0.95]);
+  createPodStation('sleep', [sleepPos[0], 0, sleepPos[1]]);
+  addPodBlocker(sleepPos[0], sleepPos[1], 1.9, 3.35);
   const storageLocker = new THREE.Group();
   addBox(storageLocker, [0, 0.88, 0], [1.15, 1.76, 0.78], wallMat);
   addBox(storageLocker, [0, 0.88, 0.41], [0.9, 1.38, 0.045], darkMat);
   addBox(storageLocker, [0, 1.7, 0.44], [0.36, 0.05, 0.04], trimMat);
-  storageLocker.position.set(3.0, 0, 4.45);
+  const lockerPos = getPodStationPosition('locker', [3.0, 4.45]);
+  storageLocker.position.set(lockerPos[0], 0, lockerPos[1]);
   scene.add(storageLocker);
-  addPodBlocker(3.0, 4.45, 1.3, 0.95);
+  addPodBlocker(lockerPos[0], lockerPos[1], 1.3, 0.95);
   addBox(scene, [-3.68, 2.1, -1.2], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0xffd2a5 }));
   addBox(scene, [3.68, 2.1, 2.9], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0x8de7e7 }));
 
-  if (state.companion) {
-    createCharacterSprite('silver', [-2.15, 1.55]);
-    podStations.push({ type: 'silver', position: new THREE.Vector3(-2.15, 0, 1.55) });
+  if (state.companion && !state.silverDead) {
+    const silverPos = getPodStationPosition('silver', [-2.15, 1.55]);
+    const silverGroup = createCharacterSprite('silver', silverPos);
+    podStations.push({ type: 'silver', group: silverGroup, position: new THREE.Vector3(silverPos[0], 0, silverPos[1]) });
+  }
+  for (const station of podStations) {
+    const size = station.type === 'net' ? [2.0, 2.0] : station.type === 'repair' ? [1.5, 2.3] : station.type === 'sleep' ? [2.0, 1.6] : [1.25, 1.75];
+    station.target = createPodClickTarget(station.type, station, station.position, size);
   }
 
   addCeilingLight(scene, 0, -3.0, 0xc9f3ff, 2.1, 11, 3.86);
@@ -1100,67 +1131,27 @@ function buildPodInteriorScene() {
   addCeilingLight(scene, 2.45, 2.8, 0xd2f4ff, 1.8, 8, 3.86);
   addCeilingLight(scene, 0, 4.8, 0xffdfc5, 1.7, 8, 3.86);
 
-  camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 80);
-  camera.position.set(0, 1.65, 5.55);
+  camera = new THREE.PerspectiveCamera(47, window.innerWidth / window.innerHeight, 0.1, 80);
+  podCameraBase.set(0, 5.0, 11.5);
+  podCameraLookAt.set(0, 1.05, -0.55);
+  camera.position.copy(podCameraBase);
+  camera.lookAt(podCameraLookAt);
   playerYaw = 0;
-  playerPitch = -0.14;
-  camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
+  playerPitch = 0;
   renderPodInventory();
 }
 
 function updateSurvival(delta) {
-  if (state.phase !== 'survival' || state.paused) return;
+  if (state.phase !== 'survival' || state.paused || state.devActive) return;
   if (document.querySelector('.modal-screen:not(.hidden)')) return;
-
-  const direction = new THREE.Vector3();
-  const forward = new THREE.Vector3(-Math.sin(playerYaw), 0, -Math.cos(playerYaw));
-  const right = new THREE.Vector3(Math.cos(playerYaw), 0, -Math.sin(playerYaw));
-  if (keys.KeyW || keys.ArrowUp) direction.add(forward);
-  if (keys.KeyS || keys.ArrowDown) direction.sub(forward);
-  if (keys.KeyD || keys.ArrowRight) direction.add(right);
-  if (keys.KeyA || keys.ArrowLeft) direction.sub(right);
-  if (direction.lengthSq() > 0) {
-    direction.normalize().multiplyScalar(3.15 * delta);
-    const nextX = clamp(camera.position.x + direction.x, -3.25, 3.25);
-    const nextZ = clamp(camera.position.z + direction.z, -5.55, 5.55);
-    if (!podPositionBlocked(nextX, camera.position.z)) camera.position.x = nextX;
-    if (!podPositionBlocked(camera.position.x, nextZ)) camera.position.z = nextZ;
-  }
-
-  let nearest = null;
-  let nearestDistance = 1.9;
-  for (const station of podStations) {
-    const distance = Math.hypot(camera.position.x - station.position.x, camera.position.z - station.position.z);
-    if (distance < nearestDistance) {
-      nearest = { kind: 'station', data: station };
-      nearestDistance = distance;
-    }
-  }
-  for (const object of podInventoryObjects) {
-    const distance = Math.hypot(camera.position.x - object.position.x, camera.position.z - object.position.z);
-    if (distance < nearestDistance) {
-      nearest = { kind: 'item', data: object };
-      nearestDistance = distance;
-    }
-  }
-  podNearby = nearest;
-  const hint = $('podInteractionHint');
-  if (!hint) return;
-  if (!nearest) { hint.classList.add('hidden'); return; }
-
-  let label = '';
-  if (nearest.kind === 'item') label = 'USAR · ' + ITEM_DATA[nearest.data.id].name.toUpperCase();
-  else {
-    const labels = {
-      net: 'USAR LA RED  ·  SHIFT + E: BATERÍA',
-      repair: 'REPARAR EL CASCO',
-      sleep: 'DESCANSAR',
-      silver: 'HABLAR CON SILVER',
-    };
-    label = labels[nearest.data.type] || 'INTERACTUAR';
-  }
-  hint.querySelector('span').textContent = label;
-  hint.classList.remove('hidden');
+  // Cámara fija: el ratón produce un desplazamiento sutil, sin movimiento libre en primera persona.
+  const mx = podMouseNdc.x;
+  const my = podMouseNdc.y;
+  const desired = new THREE.Vector3(podCameraBase.x + mx * 0.22, podCameraBase.y - my * 0.12, podCameraBase.z);
+  camera.position.lerp(desired, Math.min(1, delta * 5));
+  camera.lookAt(podCameraLookAt.x + mx * 0.08, podCameraLookAt.y - my * 0.04, podCameraLookAt.z);
+  updateSilverHud();
+  if (podHovered?.type === 'silver') updateSilverPanel();
 }
 
 function interactPod() {
