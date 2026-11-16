@@ -299,6 +299,12 @@ let audioContext = null;
 let ambienceOsc = null;
 let cine = null;
 let currentPodLights = [];
+let rescueColliders = [];
+let podStations = [];
+let podInventoryObjects = [];
+let podNearby = null;
+let podNetRunning = false;
+let podNetLight = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -313,21 +319,21 @@ function initRenderer() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.28;
   buildMenuScene();
   window.addEventListener('resize', onResize);
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = document.pointerLockElement === $('world');
   });
   $('world').addEventListener('click', () => {
-    if (state.phase === 'rescue' && !state.paused && !pointerLocked && $('titleScreen').classList.contains('hidden')) {
+    if ((state.phase === 'rescue' || state.phase === 'survival') && !state.paused && !pointerLocked && $('titleScreen').classList.contains('hidden')) {
       $('world').requestPointerLock?.();
     }
   });
   document.addEventListener('mousemove', (event) => {
-    if (pointerLocked && state.phase === 'rescue' && !state.paused) {
+    if (pointerLocked && (state.phase === 'rescue' || state.phase === 'survival') && !state.paused) {
       playerYaw -= event.movementX * 0.0021;
-      playerPitch = clamp(playerPitch - event.movementY * 0.0017, -1.05, 1.05);
+      playerPitch = clamp(playerPitch - event.movementY * 0.0017, -0.92, 0.92);
       camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
     }
   });
@@ -422,16 +428,66 @@ function addCylinder(target, position, radiusTop, radiusBottom, height, material
 }
 
 function makeRoomLights(target) {
-  target.add(new THREE.HemisphereLight(0x8ab6cc, 0x101a28, 1.2));
-  const ceiling = new THREE.PointLight(0x8de7e7, 2.2, 24);
-  ceiling.position.set(0, 4.1, -1);
+  target.add(new THREE.HemisphereLight(0xc8e8f4, 0x263746, 1.85));
+  target.add(new THREE.AmbientLight(0x9bb7c9, 0.5));
+  const ceiling = new THREE.PointLight(0xe4f7ff, 2.8, 24);
+  ceiling.position.set(0, 4.7, -1);
   target.add(ceiling);
-  const warm = new THREE.PointLight(0xffad76, 1.15, 15);
-  warm.position.set(-5, 2.8, 4);
+  const warm = new THREE.PointLight(0xffc18d, 1.25, 17);
+  warm.position.set(-4.8, 2.9, 3.5);
   target.add(warm);
-  const podLight = new THREE.PointLight(0x8de7e7, 2.4, 11);
-  podLight.position.set(0, 2.6, -6.3);
+  const podLight = new THREE.PointLight(0x9feeff, 2.6, 14);
+  podLight.position.set(0, 2.8, -6.3);
   target.add(podLight);
+}
+
+function addCeilingLight(target, x, z, color = 0xd9f4ff, intensity = 2.4, distance = 10, ceilingY = 5.02) {
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(1.25, 0.055, 0.42),
+    new THREE.MeshBasicMaterial({ color })
+  );
+  panel.position.set(x, ceilingY - 0.03, z);
+  target.add(panel);
+  const light = new THREE.PointLight(color, intensity, distance, 1.65);
+  light.position.set(x, ceilingY - 0.48, z);
+  target.add(light);
+  return light;
+}
+
+function addRoomWall(target, x, z, width, depth, material, height = 4.9) {
+  addBox(target, [x, height / 2, z], [width, height, depth], material);
+  rescueColliders.push({
+    minX: x - width / 2, maxX: x + width / 2,
+    minZ: z - depth / 2, maxZ: z + depth / 2
+  });
+}
+
+function rescuePositionBlocked(x, z) {
+  const radius = 0.34;
+  return rescueColliders.some((wall) =>
+    x + radius > wall.minX && x - radius < wall.maxX &&
+    z + radius > wall.minZ && z - radius < wall.maxZ
+  );
+}
+
+function addRoomSign(label, x, z, side) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#172c3b'; ctx.fillRect(0, 0, 512, 128);
+  ctx.strokeStyle = '#7795a5'; ctx.lineWidth = 7; ctx.strokeRect(5, 5, 502, 118);
+  ctx.fillStyle = '#e2f5f6'; ctx.font = 'bold 34px Arial';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label.toUpperCase(), 256, 65);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.45, 0.36),
+    new THREE.MeshBasicMaterial({ map: texture })
+  );
+  sign.position.set(x, 2.3, z);
+  sign.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  scene.add(sign);
 }
 
 function createPodModel(target, x, z, scale = 1) {
@@ -538,25 +594,84 @@ function tryLoadItemPng(itemId, material) {
   }, undefined, () => {});
 }
 
-function createWorldItem(itemId, position) {
-  const info = ITEM_DATA[itemId];
+function itemMaterial(color, metalness = 0.28, roughness = 0.58) {
+  return new THREE.MeshStandardMaterial({ color, metalness, roughness });
+}
+
+function addItemPart(group, geometry, material, position, rotation = [0, 0, 0]) {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(position[0], position[1], position[2]);
+  mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+  group.add(mesh);
+  return mesh;
+}
+
+function createPhysicalItemModel(itemId) {
   const group = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.43, 0.05, 24), new THREE.MeshStandardMaterial({ color: 0x23414f, emissive: 0x0a6670, emissiveIntensity: 0.35, metalness: 0.65, roughness: 0.4 }));
-  base.position.y = 0.08;
-  group.add(base);
-  const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false });
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(itemId === 'computer' || itemId === 'medkit' ? 0.92 : 0.72, itemId === 'computer' || itemId === 'medkit' ? 0.92 : 0.72, 1);
-  sprite.position.y = 0.78;
-  group.add(sprite);
-  tryLoadItemPng(itemId, material);
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.012, 6, 40), new THREE.MeshBasicMaterial({ color: 0x8de7e7, transparent: true, opacity: 0.55 }));
-  halo.rotation.x = Math.PI / 2;
-  halo.position.y = 0.12;
-  group.add(halo);
+  const metal = itemMaterial(0x9aabb6, 0.78, 0.3);
+  const darkMetal = itemMaterial(0x283b4a, 0.72, 0.38);
+  const white = itemMaterial(0xd9e3e7, 0.12, 0.72);
+  const accent = itemMaterial(0x3b9ca0, 0.38, 0.45);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(itemId === 'computer' || itemId === 'medkit' ? 0.43 : 0.29, 24),
+    new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.28, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.018;
+  group.add(shadow);
+
+  if (itemId === 'canned_food' || itemId === 'energy_drink') {
+    const can = itemMaterial(itemId === 'canned_food' ? 0xb66e47 : 0x2b9fa5, 0.42, 0.34);
+    const body = addItemPart(group, new THREE.CylinderGeometry(0.19, 0.19, 0.44, 20), can, [0, 0.24, 0]);
+    body.rotation.z = 0.05;
+    addItemPart(group, new THREE.CylinderGeometry(0.193, 0.193, 0.025, 20), metal, [0, 0.47, 0]);
+    addItemPart(group, new THREE.CylinderGeometry(0.194, 0.194, 0.11, 20), white, [0, 0.24, 0]);
+    addItemPart(group, new THREE.TorusGeometry(0.16, 0.012, 6, 20), darkMetal, [0, 0.46, 0]);
+  } else if (itemId === 'pill') {
+    addItemPart(group, new THREE.CapsuleGeometry(0.12, 0.19, 4, 10), white, [0, 0.13, 0], [0, 0, Math.PI / 2]);
+    addItemPart(group, new THREE.CylinderGeometry(0.121, 0.121, 0.095, 16), accent, [0, 0.13, 0], [0, 0, Math.PI / 2]);
+  } else if (itemId === 'flashlight') {
+    addItemPart(group, new THREE.CylinderGeometry(0.12, 0.12, 0.72, 16), darkMetal, [0, 0.15, 0], [0, 0, Math.PI / 2]);
+    addItemPart(group, new THREE.CylinderGeometry(0.17, 0.15, 0.15, 16), metal, [0.34, 0.15, 0], [0, 0, Math.PI / 2]);
+    addItemPart(group, new THREE.CircleGeometry(0.12, 16), itemMaterial(0xc6eff0, 0.1, 0.2), [0.425, 0.15, 0], [0, Math.PI / 2, 0]);
+    addItemPart(group, new THREE.TorusGeometry(0.125, 0.025, 6, 16), accent, [-0.27, 0.15, 0], [0, Math.PI / 2, 0]);
+  } else if (itemId === 'computer') {
+    addItemPart(group, new THREE.BoxGeometry(0.74, 0.055, 0.5), darkMetal, [0, 0.13, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.72, 0.45, 0.055), metal, [0, 0.38, -0.22], [-0.12, 0, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.64, 0.36, 0.018), new THREE.MeshStandardMaterial({ color: 0x173b4a, emissive: 0x1e7b86, emissiveIntensity: 0.42, roughness: 0.3 }), [0, 0.39, -0.185], [-0.12, 0, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.38, 0.018, 0.2), itemMaterial(0x546b78, 0.5, 0.42), [0, 0.165, 0.07]);
+  } else if (itemId === 'battery') {
+    addItemPart(group, new THREE.CylinderGeometry(0.19, 0.19, 0.48, 18), itemMaterial(0x456a84, 0.56, 0.34), [0, 0.25, 0]);
+    addItemPart(group, new THREE.CylinderGeometry(0.09, 0.09, 0.06, 12), metal, [0, 0.52, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.26, 0.035, 0.035), accent, [0, 0.3, 0.195]);
+  } else if (itemId === 'duct_tape') {
+    addItemPart(group, new THREE.TorusGeometry(0.23, 0.085, 10, 24), itemMaterial(0x7b9e91, 0.08, 0.82), [0, 0.12, 0], [Math.PI / 2, 0, 0]);
+    addItemPart(group, new THREE.CylinderGeometry(0.145, 0.145, 0.035, 18), itemMaterial(0xb8a88b, 0.08, 0.9), [0, 0.12, 0]);
+  } else if (itemId === 'data_core') {
+    addItemPart(group, new THREE.OctahedronGeometry(0.28, 0), new THREE.MeshStandardMaterial({ color: 0x68b9cf, emissive: 0x1b607f, emissiveIntensity: 0.48, metalness: 0.36, roughness: 0.22 }), [0, 0.31, 0], [0.18, 0.3, 0.2]);
+    addItemPart(group, new THREE.TorusGeometry(0.25, 0.018, 6, 24), metal, [0, 0.31, 0], [Math.PI / 2, 0, 0]);
+  } else if (itemId === 'star_fragment') {
+    const crystal = new THREE.MeshStandardMaterial({ color: 0xd4b4a1, emissive: 0x774d39, emissiveIntensity: 0.24, metalness: 0.22, roughness: 0.3 });
+    addItemPart(group, new THREE.ConeGeometry(0.12, 0.56, 5), crystal, [-0.1, 0.28, 0], [0.2, 0, -0.22]);
+    addItemPart(group, new THREE.ConeGeometry(0.09, 0.42, 5), crystal, [0.13, 0.22, 0.07], [-0.2, 0.1, 0.32]);
+    addItemPart(group, new THREE.OctahedronGeometry(0.13, 0), white, [0.04, 0.15, -0.12]);
+  } else if (itemId === 'medkit') {
+    addItemPart(group, new THREE.BoxGeometry(0.68, 0.34, 0.48), white, [0, 0.2, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.7, 0.06, 0.5), metal, [0, 0.39, 0]);
+    addItemPart(group, new THREE.BoxGeometry(0.16, 0.045, 0.035), itemMaterial(0x328c73, 0.1, 0.6), [0, 0.22, 0.25]);
+    addItemPart(group, new THREE.BoxGeometry(0.045, 0.16, 0.035), itemMaterial(0x328c73, 0.1, 0.6), [0, 0.22, 0.25]);
+    addItemPart(group, new THREE.TorusGeometry(0.13, 0.025, 6, 18), darkMetal, [0, 0.47, -0.08], [Math.PI / 2, 0, 0]);
+  }
+  group.userData.itemId = itemId;
+  return group;
+}
+
+function createWorldItem(itemId, position) {
+  const group = createPhysicalItemModel(itemId);
   group.position.set(position[0], 0, position[1]);
   scene.add(group);
-  const obj = { id: itemId, group, sprite, halo, position: new THREE.Vector3(position[0], 0.8, position[1]), taken: false };
+  const obj = { id: itemId, group, position: new THREE.Vector3(position[0], 0, position[1]), taken: false };
   interactables.push(obj);
   return obj;
 }
@@ -574,82 +689,101 @@ function addShipProp(target, x, z, width = 1.2, height = 1.5) {
 
 function buildRescueScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x07111f);
-  scene.fog = new THREE.Fog(0x07111f, 15, 34);
-  addStarfield(scene, 480, 55);
+  scene.background = new THREE.Color(0x122335);
+  scene.fog = new THREE.Fog(0x172a3b, 25, 54);
+  addStarfield(scene, 340, 72);
   makeRoomLights(scene);
+  rescueColliders = [];
 
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x172433, metalness: 0.48, roughness: 0.65 });
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1b2b3a, metalness: 0.63, roughness: 0.54 });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0c1927, metalness: 0.58, roughness: 0.55 });
-  const cyanMat = new THREE.MeshStandardMaterial({ color: 0x22515c, emissive: 0x1b7e87, emissiveIntensity: 0.7, metalness: 0.6 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x334b5b, metalness: 0.42, roughness: 0.66 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x304858, metalness: 0.55, roughness: 0.5 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x1c2d3c, metalness: 0.58, roughness: 0.57 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x6a8794, metalness: 0.72, roughness: 0.34 });
+  const floorLineMat = new THREE.MeshBasicMaterial({ color: 0x6fa2ad, transparent: true, opacity: 0.22 });
+
   addBox(scene, [0, -0.18, 0], [14, 0.35, 20], floorMat);
-  addBox(scene, [0, 2.6, -10], [14, 5.4, 0.45], wallMat);
-  addBox(scene, [-7, 2.6, 0], [0.45, 5.4, 20], wallMat);
-  addBox(scene, [7, 2.6, 0], [0.45, 5.4, 20], wallMat);
-  addBox(scene, [0, 5.25, 0], [14, 0.35, 20], darkMat);
-  addBox(scene, [0, 2.6, 10], [14, 5.4, 0.45], wallMat);
-  for (let z = -8.5; z <= 8.5; z += 2) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(13.7, 0.015, 0.035), new THREE.MeshBasicMaterial({ color: z < -5 ? 0x2a7e87 : 0x294259, transparent: true, opacity: 0.48 }));
-    stripe.position.set(0, 0.012, z);
-    scene.add(stripe);
-  }
-  for (let x = -6; x <= 6; x += 2) {
-    addBox(scene, [x, 2.6, -9.73], [0.045, 4.9, 0.08], cyanMat);
-    addBox(scene, [x, 0.05, 0], [0.035, 0.02, 19.5], new THREE.MeshBasicMaterial({ color: 0x314a60, transparent: true, opacity: 0.28 }));
-  }
-  for (let z = -8; z <= 8; z += 4) {
-    addBox(scene, [-6.72, 4.95, z], [0.12, 0.13, 0.9], cyanMat);
-    addBox(scene, [6.72, 4.95, z], [0.12, 0.13, 0.9], cyanMat);
-  }
-  // Emergency glass and structural ribs.
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 2.9), new THREE.MeshBasicMaterial({ color: 0x102c43, transparent: true, opacity: 0.8 }));
-  glass.position.set(0, 3.05, -9.72);
-  scene.add(glass);
-  for (let x = -3; x <= 3; x += 1.5) addBox(scene, [x, 3.05, -9.65], [0.055, 3.1, 0.09], cyanMat);
+  addRoomWall(scene, 0, -9.82, 14, 0.36, wallMat);
+  addRoomWall(scene, -6.82, 0, 0.36, 20, wallMat);
+  addRoomWall(scene, 6.82, 0, 0.36, 20, wallMat);
+  addRoomWall(scene, 0, 9.82, 14, 0.36, wallMat);
+  addBox(scene, [0, 5.22, 0], [14, 0.25, 20], darkMat);
 
-  addShipProp(scene, -5.35, -4.9, 1.5, 1.45);
-  addShipProp(scene, 5.35, 3.2, 1.4, 1.2);
-  addShipProp(scene, -5.2, 5.9, 1.3, 1.05);
-  addShipProp(scene, 5.25, -5.8, 1.3, 1.6);
-  // Wall consoles.
   for (const side of [-1, 1]) {
-    const consoleGroup = new THREE.Group();
-    addBox(consoleGroup, [0, 1.5, 0], [0.14, 2.1, 1.5], darkMat);
-    addBox(consoleGroup, [side * 0.09, 1.75, 0], [0.04, 0.75, 0.92], cyanMat);
-    consoleGroup.position.set(side * 6.5, 0, -0.7);
-    scene.add(consoleGroup);
+    const x = side * 1.9;
+    for (const [z, length] of [[-8.32, 3.36], [-3.0, 4.5], [3.0, 4.5], [8.32, 3.36]]) {
+      addRoomWall(scene, x, z, 0.2, length, wallMat);
+    }
+    for (const doorZ of [-6, 0, 6]) {
+      addBox(scene, [x, 4.65, doorZ], [0.22, 0.18, 1.5], trimMat);
+      for (const offset of [-0.68, 0.68]) addBox(scene, [x, 2.2, doorZ + offset], [0.11, 4.4, 0.12], trimMat);
+    }
   }
 
-  // Escape capsule at the evacuation point.
-  createPodModel(scene, 0, -7.2, 1.15);
-  createPodZone(scene, 0, -5.1);
-  const podSign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.36), new THREE.MeshBasicMaterial({ color: 0x8de7e7, transparent: true, opacity: 0.9 }));
-  podSign.position.set(0, 2.8, -7.0);
-  scene.add(podSign);
+  for (const z of [-3, 3]) {
+    addRoomWall(scene, -6.38, z, 1.24, 0.2, wallMat);
+    addRoomWall(scene, -3.1, z, 2.2, 0.2, wallMat);
+    addRoomWall(scene, 3.1, z, 2.2, 0.2, wallMat);
+    addRoomWall(scene, 6.38, z, 1.24, 0.2, wallMat);
+    for (const x of [-5, 5]) {
+      addBox(scene, [x, 4.65, z], [1.65, 0.18, 0.2], trimMat);
+      addBox(scene, [x - 0.78, 2.1, z], [0.1, 4.2, 0.12], trimMat);
+      addBox(scene, [x + 0.78, 2.1, z], [0.1, 4.2, 0.12], trimMat);
+    }
+  }
+
+  for (let z = -8.5; z <= 8.5; z += 1.5) addBox(scene, [0, 0.012, z], [0.055, 0.02, 0.55], floorLineMat);
+  for (const side of [-1, 1]) {
+    addBox(scene, [side * 1.65, 0.015, 0], [0.035, 0.025, 18.8], floorLineMat);
+    for (const z of [-6, 0, 6]) {
+      const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.42, 3), new THREE.MeshBasicMaterial({ color: 0x8de7e7 }));
+      arrow.rotation.x = Math.PI / 2;
+      arrow.position.set(side * 1.25, 0.04, z);
+      scene.add(arrow);
+    }
+  }
+
+  addRoomSign('GALLEY / FOOD', -2.05, 6, -1);
+  addRoomSign('CARGO BAY', 2.05, 6, 1);
+  addRoomSign('MEDICAL BAY', -2.05, 0, -1);
+  addRoomSign('ENGINEERING', 2.05, 0, 1);
+  addRoomSign('CREW QUARTERS', -2.05, -6, -1);
+  addRoomSign('AUXILIARY STORAGE', 2.05, -6, 1);
+
+  for (const z of [-6.2, 0, 6.2]) {
+    addCeilingLight(scene, -4.6, z, 0xd7efff, 2.45, 10);
+    addCeilingLight(scene, 4.6, z, 0xffd4ae, 2.15, 10);
+  }
+  addCeilingLight(scene, 0, -6.5, 0xb7f8f2, 2.1, 10);
+  addCeilingLight(scene, 0, 0, 0xc9e8ff, 2.0, 10);
+  addCeilingLight(scene, 0, 6.5, 0xffd7b8, 2.0, 10);
+
+  addShipProp(scene, -5.55, 8.0, 1.55, 0.92);
+  addShipProp(scene, 5.5, 8.0, 1.55, 1.1);
+  addShipProp(scene, -5.55, 1.1, 1.4, 1.45);
+  addShipProp(scene, 5.45, 1.05, 1.55, 1.25);
+  addShipProp(scene, -5.5, -7.0, 1.5, 1.05);
+  addShipProp(scene, 5.5, -7.0, 1.55, 1.3);
+
+  createPodModel(scene, 0, -8.0, 1.12);
+  createPodZone(scene, 0, -6.35);
 
   interactables = [];
   const spawns = [
-    ['canned_food', [-4.0, 2.6]],
-    ['battery', [3.8, -1.4]],
-    ['pill', [-4.7, -5.7]],
-    ['flashlight', [4.6, 5.2]],
-    ['computer', [-1.3, -2.9]],
-    ['duct_tape', [5.0, -6.8]],
-    ['energy_drink', [-2.1, 6.3]],
-    ['data_core', [2.3, 4.6]],
-    ['star_fragment', [-2.8, -7.7]],
-    ['medkit', [3.0, 0.8]],
-    ['silver', [5.4, 1.0]]
+    ['canned_food', [-4.45, 7.0]], ['energy_drink', [-5.0, 5.15]],
+    ['battery', [4.45, 7.0]], ['duct_tape', [5.0, 5.1]],
+    ['pill', [-4.35, 0.0]], ['medkit', [-5.1, -1.35]],
+    ['computer', [4.4, 0.0]], ['data_core', [5.0, -1.35]],
+    ['flashlight', [-4.35, -6.2]], ['star_fragment', [4.45, -6.25]],
+    ['silver', [5.05, -4.65]]
   ];
   for (const [id, pos] of spawns) {
     if (id === 'silver') createCharacterSprite('silver', pos);
     else createWorldItem(id, pos);
   }
-  scene.userData.podPosition = new THREE.Vector3(0, 0, -5.1);
 
+  scene.userData.podPosition = new THREE.Vector3(0, 0, -6.35);
   camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.1, 90);
-  camera.position.set(0, 1.65, 7.1);
+  camera.position.set(0, 1.65, 8.55);
   playerYaw = 0;
   playerPitch = 0;
   camera.rotation.set(0, playerYaw, 0, 'YXZ');
@@ -657,31 +791,36 @@ function buildRescueScene() {
 
 function createCharacterSprite(characterId, position) {
   const group = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 24), new THREE.MeshStandardMaterial({ color: 0x27535a, emissive: 0x0c6569, emissiveIntensity: 0.4 }));
-  base.position.y = 0.08;
-  group.add(base);
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.36, 20),
+    new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.32, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.018;
+  group.add(shadow);
+
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 256; canvas.height = 256;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#18384a';
-  ctx.beginPath(); ctx.roundRect(22, 10, 212, 236, 78); ctx.fill();
-  ctx.strokeStyle = '#8de7e7'; ctx.lineWidth = 5; ctx.stroke();
-  ctx.fillStyle = '#d5eeee'; ctx.beginPath(); ctx.arc(128, 86, 47, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#253a4a'; ctx.beginPath(); ctx.ellipse(128, 184, 72, 71, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#253b4b';
+  ctx.beginPath(); ctx.roundRect(34, 8, 188, 238, 58); ctx.fill();
+  ctx.fillStyle = '#d9e6e8'; ctx.beginPath(); ctx.arc(128, 83, 47, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#304b5a'; ctx.beginPath(); ctx.ellipse(128, 185, 74, 72, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#8de7e7'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center'; ctx.fillText('SILVER', 128, 230);
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(spriteMat);
-  new THREE.TextureLoader().load('./assets/characters/silver.png', (loaded) => { loaded.colorSpace = THREE.SRGBColorSpace; spriteMat.map = loaded; spriteMat.needsUpdate = true; }, undefined, () => {});
+  new THREE.TextureLoader().load('./assets/characters/silver.png', (loaded) => {
+    loaded.colorSpace = THREE.SRGBColorSpace;
+    spriteMat.map = loaded;
+    spriteMat.needsUpdate = true;
+  }, undefined, () => {});
   sprite.scale.set(0.95, 1.25, 1);
-  sprite.position.y = 1.0;
+  sprite.position.y = 0.92;
   group.add(sprite);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.013, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffad76, transparent: true, opacity: 0.7 }));
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0.12; group.add(ring);
   group.position.set(position[0], 0, position[1]);
   scene.add(group);
-  interactables.push({ id: characterId, group, sprite, halo: ring, position: new THREE.Vector3(position[0], 0.8, position[1]), taken: false });
+  interactables.push({ id: characterId, group, sprite, position: new THREE.Vector3(position[0], 0, position[1]), taken: false });
 }
 
 function buildCinematicScene() {
@@ -729,50 +868,252 @@ function buildCinematicScene() {
   return { scene: cineScene, camera: cineCamera, ship, pod, debris, particles, flash, started: performance.now(), exploded: false };
 }
 
+function createPodStation(type, position) {
+  const group = new THREE.Group();
+  const shell = itemMaterial(0x40596a, 0.62, 0.38);
+  const dark = itemMaterial(0x1b2e3d, 0.7, 0.48);
+  const trim = itemMaterial(0x9aabb4, 0.76, 0.3);
+  const screen = new THREE.MeshStandardMaterial({ color: 0x276c76, emissive: 0x2a9ba0, emissiveIntensity: 0.65, metalness: 0.45, roughness: 0.3 });
+
+  if (type === 'net') {
+    addBox(group, [0, 0.72, 0], [1.65, 1.3, 0.86], shell);
+    addBox(group, [0, 1.39, 0.16], [1.3, 0.12, 0.48], dark);
+    addCylinder(group, [0, 1.52, -0.23], 0.42, 0.42, 0.18, trim, [Math.PI / 2, 0, 0]);
+    addCylinder(group, [0, 1.52, -0.23], 0.12, 0.12, 0.2, dark, [Math.PI / 2, 0, 0]);
+    addBox(group, [0, 1.02, -0.45], [0.62, 0.28, 0.035], screen);
+    addBox(group, [-0.48, 0.11, 0.19], [0.12, 0.22, 0.12], trim);
+    addBox(group, [0.48, 0.11, 0.19], [0.12, 0.22, 0.12], trim);
+  } else if (type === 'repair') {
+    addBox(group, [0, 1.22, 0], [0.22, 2.05, 1.15], dark);
+    addBox(group, [-0.13, 1.45, 0], [0.08, 0.82, 0.76], screen);
+    addBox(group, [-0.2, 0.73, 0], [0.09, 0.12, 0.56], trim);
+    for (const z of [-0.44, 0.44]) addCylinder(group, [-0.08, 1.92, z], 0.07, 0.07, 0.07, trim, [0, 0, Math.PI / 2]);
+  } else if (type === 'sleep') {
+    addBox(group, [0, 0.58, 0], [1.65, 0.38, 3.15], dark);
+    addBox(group, [0, 0.82, -0.12], [1.48, 0.18, 2.88], itemMaterial(0x536f83, 0.08, 0.92));
+    addBox(group, [0, 0.98, -1.04], [1.05, 0.15, 0.5], itemMaterial(0xd5dfe2, 0.02, 0.95));
+    addBox(group, [0, 1.0, 0.34], [1.45, 0.08, 0.74], itemMaterial(0x2d6972, 0.04, 0.88));
+    addBox(group, [-0.84, 0.76, 0], [0.08, 0.55, 3.18], trim);
+  } else if (type === 'counter') {
+    addBox(group, [0, 0.62, 0], [2.25, 1.1, 0.75], shell);
+    addBox(group, [0, 1.2, -0.02], [2.28, 0.09, 0.8], trim);
+  }
+  group.position.set(position[0], 0, position[1]);
+  scene.add(group);
+  podStations.push({ type, group, position: new THREE.Vector3(position[0], 0, position[1]) });
+  return group;
+}
+
+function getPodItemPosition(index) {
+  const columns = [-2.35, -1.05, 1.05, 2.35];
+  const rows = [0.65, 1.75, 2.85, 3.95];
+  return [columns[index % columns.length], rows[Math.floor(index / columns.length) % rows.length]];
+}
+
+function renderPodInventory() {
+  for (const object of podInventoryObjects) scene.remove(object.group);
+  podInventoryObjects = [];
+  if (!scene?.userData?.isPod) return;
+  state.inventory.forEach((entry, index) => {
+    if (!ITEM_DATA[entry.id]) return;
+    const group = createPhysicalItemModel(entry.id);
+    const [x, z] = getPodItemPosition(index);
+    group.position.set(x, 0, z);
+    scene.add(group);
+    podInventoryObjects.push({ uid: entry.uid, id: entry.id, group, position: new THREE.Vector3(x, 0, z) });
+  });
+}
+
 function buildPodInteriorScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x040b15);
-  scene.fog = new THREE.Fog(0x050d17, 8, 28);
-  addStarfield(scene, 750, 55);
-  scene.add(new THREE.HemisphereLight(0x89c6d7, 0x111a25, 1.2));
-  const ceiling = new THREE.PointLight(0x8de7e7, 1.8, 18); ceiling.position.set(0, 3.8, 1); scene.add(ceiling);
-  const warm = new THREE.PointLight(0xffad76, 0.45, 9); warm.position.set(-2, 1.8, 3); scene.add(warm);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x203444, metalness: 0.72, roughness: 0.39 });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0d1d2b, metalness: 0.64, roughness: 0.52 });
-  addBox(scene, [0, -0.2, 0], [8, 0.4, 13], darkMat);
+  scene.userData.isPod = true;
+  scene.background = new THREE.Color(0x172b3d);
+  scene.fog = new THREE.Fog(0x172b3d, 30, 64);
+  addStarfield(scene, 320, 70);
+  currentPodLights = [];
+  podStations = [];
+  podInventoryObjects = [];
+  podNearby = null;
+  podNetRunning = false;
+  interactables = [];
+
+  scene.add(new THREE.HemisphereLight(0xd9f1fb, 0x526a78, 2.0));
+  scene.add(new THREE.AmbientLight(0xb8d1df, 0.58));
+  const ceiling = new THREE.PointLight(0xf0fbff, 3.2, 22);
+  ceiling.position.set(0, 3.55, 0.8); scene.add(ceiling);
+  const warm = new THREE.PointLight(0xffc58e, 1.25, 13);
+  warm.position.set(-2.7, 2.1, 1.0); scene.add(warm);
+  const workLight = new THREE.PointLight(0x9beaf0, 1.8, 9);
+  workLight.position.set(2.8, 2.15, -0.2); scene.add(workLight);
+
+  const wallMat = itemMaterial(0x465f70, 0.66, 0.38);
+  const darkMat = itemMaterial(0x263c4d, 0.56, 0.55);
+  const floorMat = itemMaterial(0x526a78, 0.42, 0.68);
+  const trimMat = itemMaterial(0x8da3ad, 0.74, 0.32);
+  addBox(scene, [0, -0.2, 0], [8, 0.4, 13], floorMat);
   addBox(scene, [0, 4, 0], [8, 0.25, 13], darkMat);
   addBox(scene, [-4, 1.9, 0], [0.25, 4, 13], wallMat);
   addBox(scene, [4, 1.9, 0], [0.25, 4, 13], wallMat);
   addBox(scene, [0, 1.9, 6.4], [8, 4, 0.25], wallMat);
-  // Forward observation window.
-  const windowRim = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.18, 16, 64), new THREE.MeshStandardMaterial({ color: 0x647d8c, metalness: 0.8, roughness: 0.25 }));
-  windowRim.position.set(0, 2.1, -6.15); scene.add(windowRim);
-  const windowGlass = new THREE.Mesh(new THREE.CircleGeometry(1.52, 64), new THREE.MeshBasicMaterial({ color: 0x102d48, transparent: true, opacity: 0.2, depthWrite: false }));
-  windowGlass.position.set(0, 2.1, -6.18); scene.add(windowGlass);
-  const planet = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 28), new THREE.MeshStandardMaterial({ color: 0x355a77, emissive: 0x0b2138, roughness: 0.95 }));
-  planet.position.set(-0.55, 2.4, -7.0); scene.add(planet);
-  const planetLight = new THREE.PointLight(0x81b9d6, 0.5, 4); planetLight.position.set(-0.3, 2.3, -6.5); scene.add(planetLight);
+  addBox(scene, [0, 1.9, -6.4], [8, 4, 0.25], wallMat);
+  addBox(scene, [0, 3.84, 0.75], [2.7, 0.055, 0.55], new THREE.MeshBasicMaterial({ color: 0xd8f3fb }));
+
+  const windowRim = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.18, 16, 64), trimMat);
+  windowRim.position.set(0, 2.1, -6.12); scene.add(windowRim);
+  const windowGlass = new THREE.Mesh(new THREE.CircleGeometry(1.52, 64), new THREE.MeshBasicMaterial({ color: 0x315c7a, transparent: true, opacity: 0.5, depthWrite: false }));
+  windowGlass.position.set(0, 2.1, -6.16); scene.add(windowGlass);
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(1.03, 32, 32), new THREE.MeshStandardMaterial({ color: 0x7da9bf, emissive: 0x294a67, emissiveIntensity: 0.55, roughness: 0.92 }));
+  planet.position.set(-0.55, 2.4, -7.05); scene.add(planet);
+  const planetLight = new THREE.PointLight(0x8fc5ec, 0.95, 5);
+  planetLight.position.set(-0.3, 2.3, -6.55); scene.add(planetLight);
   for (let i = 0; i < 5; i++) {
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), new THREE.MeshBasicMaterial({ color: 0xe4ffff }));
-    light.position.set(random(-1.3, 1.3), random(1.1, 3.1), -7); scene.add(light);
+    const star = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), new THREE.MeshBasicMaterial({ color: 0xf0ffff }));
+    star.position.set(random(-1.3, 1.3), random(1.1, 3.1), -7); scene.add(star);
   }
-  // Console and sleeping bunk.
-  addBox(scene, [0, 0.95, -3.35], [4.5, 0.55, 1.05], wallMat);
-  addBox(scene, [0, 1.35, -3.6], [2.5, 0.08, 0.8], new THREE.MeshStandardMaterial({ color: 0x244b56, emissive: 0x0c4b54, emissiveIntensity: 0.7 }));
-  for (let i = 0; i < 4; i++) {
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x8de7e7 : 0xffad76 }));
-    button.position.set(-1.25 + i * 0.8, 1.46, -3.3); scene.add(button); currentPodLights.push(button);
+
+  createPodStation('net', [0, 0, -4.35]);
+  podNetLight = new THREE.PointLight(0x8de7e7, 1.8, 5);
+  podNetLight.position.set(0, 1.8, -4.3); scene.add(podNetLight);
+  createPodStation('repair', [3.15, 0, -0.4]);
+  createPodStation('sleep', [-2.9, 0, -0.95]);
+  createPodStation('counter', [2.6, 0, 4.15]);
+  addBox(scene, [-3.68, 2.1, -1.2], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0xffd2a5 }));
+  addBox(scene, [3.68, 2.1, 2.9], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0x8de7e7 }));
+
+  if (state.companion) {
+    createCharacterSprite('silver', [-2.15, 1.55]);
+    podStations.push({ type: 'silver', position: new THREE.Vector3(-2.15, 0, 1.55) });
   }
-  addBox(scene, [-2.6, 0.75, 1.0], [1.45, 0.42, 3.8], darkMat);
-  addBox(scene, [2.6, 0.75, 1.0], [1.45, 0.42, 3.8], darkMat);
-  addBox(scene, [0, 0.35, 4.6], [3.1, 0.14, 0.55], wallMat);
-  for (const side of [-1, 1]) {
-    addBox(scene, [side * 3.72, 2.2, -1.5], [0.08, 2.8, 0.07], new THREE.MeshBasicMaterial({ color: 0x39818a }));
+
+  addCeilingLight(scene, 0, -3.0, 0xc9f3ff, 2.1, 11, 3.86);
+  addCeilingLight(scene, -2.4, 0.8, 0xffd4b5, 1.7, 8, 3.86);
+  addCeilingLight(scene, 2.45, 2.8, 0xd2f4ff, 1.8, 8, 3.86);
+  addCeilingLight(scene, 0, 4.8, 0xffdfc5, 1.7, 8, 3.86);
+
+  camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 80);
+  camera.position.set(0, 1.65, 5.55);
+  playerYaw = 0;
+  playerPitch = -0.08;
+  camera.rotation.set(playerPitch, playerYaw, 0, 'YXZ');
+  renderPodInventory();
+}
+
+function updateSurvival(delta) {
+  if (state.phase !== 'survival' || state.paused) return;
+  if (document.querySelector('.modal-screen:not(.hidden)')) return;
+
+  const direction = new THREE.Vector3();
+  const forward = new THREE.Vector3(-Math.sin(playerYaw), 0, -Math.cos(playerYaw));
+  const right = new THREE.Vector3(Math.cos(playerYaw), 0, -Math.sin(playerYaw));
+  if (keys.KeyW || keys.ArrowUp) direction.add(forward);
+  if (keys.KeyS || keys.ArrowDown) direction.sub(forward);
+  if (keys.KeyD || keys.ArrowRight) direction.add(right);
+  if (keys.KeyA || keys.ArrowLeft) direction.sub(right);
+  if (direction.lengthSq() > 0) {
+    direction.normalize().multiplyScalar(3.15 * delta);
+    camera.position.x = clamp(camera.position.x + direction.x, -3.25, 3.25);
+    camera.position.z = clamp(camera.position.z + direction.z, -5.55, 5.55);
   }
-  camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.1, 80);
-  camera.position.set(0, 2.05, 5.75);
-  camera.lookAt(0, 1.9, -3.3);
-  state.podLights = currentPodLights;
+
+  let nearest = null;
+  let nearestDistance = 1.9;
+  for (const station of podStations) {
+    const distance = Math.hypot(camera.position.x - station.position.x, camera.position.z - station.position.z);
+    if (distance < nearestDistance) {
+      nearest = { kind: 'station', data: station };
+      nearestDistance = distance;
+    }
+  }
+  for (const object of podInventoryObjects) {
+    const distance = Math.hypot(camera.position.x - object.position.x, camera.position.z - object.position.z);
+    if (distance < nearestDistance) {
+      nearest = { kind: 'item', data: object };
+      nearestDistance = distance;
+    }
+  }
+  podNearby = nearest;
+  const hint = $('podInteractionHint');
+  if (!hint) return;
+  if (!nearest) { hint.classList.add('hidden'); return; }
+
+  let label = '';
+  if (nearest.kind === 'item') label = 'USAR · ' + ITEM_DATA[nearest.data.id].name.toUpperCase();
+  else {
+    const labels = {
+      net: 'USAR LA RED  ·  SHIFT + E: BATERÍA',
+      repair: 'REPARAR EL CASCO',
+      sleep: 'DESCANSAR',
+      silver: 'HABLAR CON SILVER',
+      counter: 'ALMACENAMIENTO'
+    };
+    label = labels[nearest.data.type] || 'INTERACTUAR';
+  }
+  hint.querySelector('span').textContent = label;
+  hint.classList.remove('hidden');
+}
+
+function interactPod() {
+  if (state.phase !== 'survival' || state.paused || !podNearby) return;
+  const target = podNearby;
+  if (target.kind === 'item') { useItem(target.data.uid); return; }
+  switch (target.data.type) {
+    case 'net': usePodNet(Boolean(keys.ShiftLeft || keys.ShiftRight)); break;
+    case 'repair': repairPodAtStation(); break;
+    case 'sleep': sleep(); break;
+    case 'silver': talkToSilver(); break;
+    case 'counter': showSurvivalToast('Tus objetos están aquí, a la vista y al alcance.'); break;
+  }
+}
+
+function usePodNet(useBattery = false) {
+  if (podNetRunning) return;
+  if (state.energy < 1) { showSurvivalToast('Necesitas 1 de energía para lanzar la red.'); return; }
+  const batteryEntry = state.inventory.find((entry) => entry.id === 'battery');
+  if (useBattery && !batteryEntry) {
+    showSurvivalToast('No tienes una batería. Pulsa E para lanzar la red sin refuerzo.');
+    return;
+  }
+  if (!consumeEnergy(1)) return;
+  if (useBattery && batteryEntry) removeInventoryEntry(batteryEntry.uid);
+  podNetRunning = true;
+  if (podNetLight) podNetLight.intensity = 4.2;
+  showSurvivalToast(useBattery ? 'La red sale con energía auxiliar…' : 'La red se despliega fuera de la cápsula…', 1800);
+  playSound('net');
+  setTimeout(() => {
+    let resultId;
+    let amount = 1;
+    let note = 'Algo quedó atrapado en la malla.';
+    if (state.networkBoost > 0) {
+      resultId = 'canned_food';
+      amount = 2;
+      state.networkBoost -= 1;
+      note = 'La mejora de Silver funcionó: recuperaste dos latas de comida.';
+    } else {
+      const table = [];
+      for (const id of LOOT_TABLE) {
+        const info = ITEM_DATA[id];
+        let weight = info.weight;
+        if (useBattery && (id === 'canned_food' || id === 'energy_drink' || id === 'medkit')) weight *= 2.3;
+        if (useBattery && (id === 'data_core' || id === 'star_fragment')) weight *= 0.65;
+        for (let count = 0; count < Math.round(weight); count++) table.push(id);
+      }
+      resultId = pick(table);
+    }
+    addStorageItem(resultId, amount);
+    podNetRunning = false;
+    if (podNetLight) podNetLight.intensity = 1.8;
+    showSurvivalToast(note + ' Encontraste: ' + ITEM_DATA[resultId].name + (amount > 1 ? ' × ' + amount : '') + '.');
+    playSound('reward');
+    saveGame();
+  }, 1700);
+}
+
+function repairPodAtStation() {
+  if (state.hull >= 100) { showSurvivalToast('El casco no necesita reparaciones.'); return; }
+  if (!consumeEnergy(1)) return;
+  changeHull(100 - state.hull);
+  playSound('repair');
+  showSurvivalToast('Aseguraste el panel y sellaste la cápsula por completo.');
 }
 
 function setupAudio() {
@@ -867,7 +1208,7 @@ function startNewGame() {
   });
   cine = null;
   $('gameOverScreen').classList.add('hidden');
-  for (const modal of ['netModal', 'repairModal', 'eventModal', 'dialogModal', 'itemModal', 'pauseModal']) hideModal(modal);
+  for (const modal of ['eventModal', 'dialogModal', 'pauseModal']) hideModal(modal);
   currentPodLights = [];
   buildRescueScene();
   setInterface('rescue');
@@ -954,9 +1295,10 @@ function updateRescue(delta) {
   if (keys.KeyA || keys.ArrowLeft) direction.sub(right);
   if (direction.lengthSq() > 0) {
     direction.normalize().multiplyScalar(speed * delta);
-    camera.position.add(direction);
-    camera.position.x = clamp(camera.position.x, -6.0, 6.0);
-    camera.position.z = clamp(camera.position.z, -9.0, 9.0);
+    const nextX = clamp(camera.position.x + direction.x, -6.35, 6.35);
+    const nextZ = clamp(camera.position.z + direction.z, -9.25, 9.25);
+    if (!rescuePositionBlocked(nextX, camera.position.z)) camera.position.x = nextX;
+    if (!rescuePositionBlocked(camera.position.x, nextZ)) camera.position.z = nextZ;
   }
   const player = camera.position;
   let nearest = null;
@@ -1172,34 +1514,13 @@ function syncHud() {
     if (i < state.energy) pip.classList.add('on');
     $('energyPips').appendChild(pip);
   }
-  $('netButton').disabled = state.energy < 1;
-  $('repairButton').disabled = state.energy < 1 || state.hull >= 100;
-  $('talkButton').disabled = state.energy < 1 || !state.companion;
-  $('companionName').textContent = state.companion ? state.companionName : 'Nadie a bordo';
-  $('companionStatus').textContent = state.companion ? 'A bordo · listo para hablar' : 'Viajas en solitario';
-  $('companionCard').classList.toggle('is-active', state.companion);
-  $('podItemCount').textContent = state.inventory.length + (state.companion ? ' objetos + 1 persona' : ' objetos guardados');
-  $('storageCount').textContent = state.inventory.length + ' ITEMS';
   renderHand();
 }
 
 function renderStorage() {
-  const root = $('storageGrid');
-  root.innerHTML = '';
-  if (!state.inventory.length) {
-    root.appendChild(el('div', 'storage-empty', 'Todavía no has recuperado ningún objeto.'));
-    return;
-  }
-  for (const entry of state.inventory) {
-    const info = ITEM_DATA[entry.id];
-    if (!info) continue;
-    const button = el('button', 'storage-item');
-    button.type = 'button';
-    button.appendChild(createIconNode(entry.id, info.icon, 'storage-icon'));
-    button.appendChild(el('span', 'storage-name', info.name));
-    button.addEventListener('click', () => openItem(entry.uid));
-    root.appendChild(button);
-  }
+  const count = $('storageCount');
+  if (count) count.textContent = state.inventory.length + ' OBJETOS';
+  renderPodInventory();
 }
 
 function consumeEnergy(amount = 1) {
@@ -1230,40 +1551,11 @@ function addStorageItem(itemId, count = 1) {
 
 function openItem(uid) {
   const entry = state.inventory.find((item) => item.uid === uid);
-  if (!entry) return;
-  const info = ITEM_DATA[entry.id];
-  state.selectedItem = uid;
-  $('itemDetailIcon').innerHTML = '';
-  $('itemDetailIcon').appendChild(createIconNode(entry.id, info.icon, 'detail-icon-art'));
-  $('itemDetailName').textContent = info.name;
-  $('itemDetailDescription').textContent = info.desc;
-  const actions = $('itemDetailActions');
-  actions.innerHTML = '';
-  const action = el('button', 'choice-button');
-  action.type = 'button';
-  action.textContent = itemActionLabel(entry.id);
-  action.addEventListener('click', () => useItem(uid));
-  actions.appendChild(action);
-  const keep = el('button', 'choice-button', 'Dejarlo guardado');
-  keep.addEventListener('click', () => hideModal('itemModal'));
-  actions.appendChild(keep);
-  showModal('itemModal');
+  if (entry) useItem(uid);
 }
 
 function itemActionLabel(id) {
-  const labels = {
-    canned_food: 'Comer · recuperar 1 energía',
-    pill: 'Usar pastilla · estabilizar la cápsula',
-    flashlight: 'Encender linterna',
-    computer: 'Revisar computadora',
-    battery: 'Reservar para la red',
-    duct_tape: 'Aplicar cinta · contener una fisura',
-    energy_drink: 'Beber · recuperar toda la energía',
-    data_core: 'Descomponer · +1 energía',
-    star_fragment: 'Extraer carga · +1 energía',
-    medkit: 'Usar kit médico · +35% integridad'
-  };
-  return labels[id] || 'Usar objeto';
+  return ITEM_DATA[id]?.name || 'Objeto';
 }
 
 function removeInventoryEntry(uid) {
@@ -1278,185 +1570,55 @@ function useItem(uid) {
   const entry = state.inventory.find((item) => item.uid === uid);
   if (!entry) return;
   const id = entry.id;
+
   if (id === 'canned_food') {
     if (state.energy >= state.maxEnergy) { showSurvivalToast('Tu energía ya está completa.'); return; }
-    removeInventoryEntry(uid); state.energy = Math.min(state.maxEnergy, state.energy + 1);
-    showSurvivalToast('Comiste algo. +1 energía.'); playSound('success');
+    removeInventoryEntry(uid);
+    state.energy = Math.min(state.maxEnergy, state.energy + 1);
+    showSurvivalToast('Comiste algo. +1 energía.');
+    playSound('success');
   } else if (id === 'pill') {
     if (state.hull >= 100) { showSurvivalToast('No necesitas usarla ahora.'); return; }
-    removeInventoryEntry(uid); changeHull(20); showSurvivalToast('El estabilizador hizo efecto. +20% integridad.'); playSound('success');
+    removeInventoryEntry(uid); changeHull(20);
+    showSurvivalToast('El estabilizador hizo efecto. +20% integridad.');
+    playSound('success');
   } else if (id === 'flashlight') {
-    state.flashlightOn = true; removeInventoryEntry(uid); showSurvivalToast('Linterna encendida. Puede servir durante un evento nocturno.'); playSound('click');
+    state.flashlightOn = true;
+    removeInventoryEntry(uid);
+    showSurvivalToast('Linterna encendida. Puede servir durante un evento nocturno.');
+    playSound('click');
   } else if (id === 'computer') {
     if (state.computerBroken) { showSurvivalToast('La computadora está averiada.'); return; }
-    hideModal('itemModal');
-    showDialog('La computadora responde. Puedo revisar los sistemas de navegación, aunque para la red todavía necesito un poco más de tiempo.');
-    return;
+    showSurvivalToast('La computadora está lista. Silver puede usarla para mejorar la red.');
   } else if (id === 'battery') {
-    hideModal('itemModal'); $('batteryBoost').checked = true; openNetModal(); return;
+    showSurvivalToast('Acércate al mecanismo de la red y pulsa SHIFT + E para conectarla.');
   } else if (id === 'duct_tape') {
     if (state.hull >= 100) { showSurvivalToast('El casco no tiene fisuras que sellar.'); return; }
-    removeInventoryEntry(uid); changeHull(12); showSurvivalToast('La cinta contuvo una pequeña fisura. +12% integridad.'); playSound('repair');
+    removeInventoryEntry(uid); changeHull(12);
+    showSurvivalToast('La cinta contuvo una pequeña fisura. +12% integridad.');
+    playSound('repair');
   } else if (id === 'energy_drink') {
-    removeInventoryEntry(uid); state.energy = state.maxEnergy; syncHud(); showSurvivalToast('¡Energía restaurada al máximo!'); playSound('success');
+    removeInventoryEntry(uid);
+    state.energy = state.maxEnergy;
+    showSurvivalToast('¡Energía restaurada al máximo!');
+    playSound('success');
   } else if (id === 'data_core' || id === 'star_fragment') {
     if (state.energy >= state.maxEnergy) { showSurvivalToast('Tu energía ya está completa.'); return; }
-    removeInventoryEntry(uid); state.energy = Math.min(state.maxEnergy, state.energy + 1); syncHud(); showSurvivalToast('Carga recuperada. +1 energía.'); playSound('success');
+    removeInventoryEntry(uid);
+    state.energy = Math.min(state.maxEnergy, state.energy + 1);
+    showSurvivalToast('Carga recuperada. +1 energía.');
+    playSound('success');
   } else if (id === 'medkit') {
     if (state.hull >= 100) { showSurvivalToast('No necesitas el kit médico ahora.'); return; }
-    removeInventoryEntry(uid); changeHull(35); showSurvivalToast('El kit estabilizó el casco. +35% integridad.'); playSound('success');
+    removeInventoryEntry(uid); changeHull(35);
+    showSurvivalToast('El kit estabilizó el casco. +35% integridad.');
+    playSound('success');
   }
-  hideModal('itemModal');
   syncHud();
   saveGame();
 }
 
-function openNetModal() {
-  if (state.energy < 1) { showSurvivalToast('Necesitas 1 de energía para lanzar la red.'); return; }
-  $('netStatusText').textContent = 'Te acercas a la ventana y preparas el mecanismo de lanzamiento.';
-  $('netAnimation').classList.remove('casting');
-  $('netReward').classList.add('hidden');
-  $('castNetButton').disabled = false;
-  $('castNetButton').dataset.mode = 'cast';
-  $('castNetButton').textContent = 'LANZAR LA RED · 1 ⚡';
-  $('batteryBoost').disabled = !state.inventory.some((entry) => entry.id === 'battery');
-  $('batteryBoost').checked = false;
-  showModal('netModal');
-}
 
-function castNet() {
-  if ($('castNetButton').dataset.mode === 'close') { hideModal('netModal'); $('castNetButton').dataset.mode = 'cast'; return; }
-  if (state.energy < 1) { showSurvivalToast('No tienes energía suficiente.'); return; }
-  const useBattery = $('batteryBoost').checked;
-  const batteryEntry = state.inventory.find((entry) => entry.id === 'battery');
-  if (useBattery && !batteryEntry) { showSurvivalToast('No tienes una batería disponible.'); $('batteryBoost').checked = false; return; }
-  consumeEnergy(1);
-  if (useBattery) removeInventoryEntry(batteryEntry.uid);
-  $('castNetButton').disabled = true;
-  $('batteryBoost').disabled = true;
-  $('netAnimation').classList.add('casting');
-  $('netStatusText').textContent = 'La red se aleja de la cápsula. Algo acaba de engancharse…';
-  playSound('net');
-  setTimeout(() => {
-    let resultId;
-    let amount = 1;
-    let note = 'Algo quedó atrapado en la malla.';
-    if (state.networkBoost > 0) {
-      resultId = 'canned_food';
-      amount = 2;
-      state.networkBoost -= 1;
-      note = 'La mejora de Silver funcionó: recuperaste dos latas de comida.';
-    } else {
-      const table = [];
-      for (const id of LOOT_TABLE) {
-        const info = ITEM_DATA[id];
-        let weight = info.weight;
-        if (useBattery && (id === 'canned_food' || id === 'energy_drink' || id === 'medkit')) weight *= 2.3;
-        if (useBattery && (id === 'data_core' || id === 'star_fragment')) weight *= 0.65;
-        for (let n = 0; n < Math.round(weight); n++) table.push(id);
-      }
-      resultId = pick(table);
-    }
-    addStorageItem(resultId, amount);
-    const info = ITEM_DATA[resultId];
-    $('netReward').innerHTML = '<div class="reward-icon">' + info.icon + (amount > 1 ? ' ×' + amount : '') + '</div><b></b><small></small>';
-    $('netReward').querySelector('b').textContent = amount > 1 ? amount + ' × ' + info.name : info.name;
-    $('netReward').querySelector('small').textContent = note + (useBattery ? ' La batería mejoró las probabilidades.' : '');
-    $('netReward').classList.remove('hidden');
-    $('netStatusText').textContent = 'La red regresó. Mira lo que encontraste.';
-    $('castNetButton').textContent = 'CERRAR';
-    $('castNetButton').dataset.mode = 'close';
-    $('castNetButton').disabled = false;
-    playSound('reward');
-    saveGame();
-  }, 2100);
-}
-
-function openRepair() {
-  if (state.hull >= 100) { showSurvivalToast('La cápsula ya está al 100%.'); return; }
-  if (!consumeEnergy(1)) return;
-  state.repairSequence = [];
-  while (state.repairSequence.length < 3) {
-    const n = Math.floor(Math.random() * 6);
-    if (!state.repairSequence.includes(n)) state.repairSequence.push(n);
-  }
-  state.repairStep = 0;
-  $('repairStatus').textContent = 'ESPERANDO ALINEACIÓN';
-  $('repairInstructions').textContent = 'Te acercas a la pared dañada. Asegura los tres tornillos en el orden indicado.';
-  $('repairFill').style.width = '0%';
-  $('repairStartButton').classList.remove('hidden');
-  $('repairStartButton').disabled = false;
-  $('repairStartButton').dataset.mode = 'start';
-  $('repairStartButton').textContent = 'COMENZAR REPARACIÓN';
-  const board = $('screwBoard');
-  board.innerHTML = '';
-  for (let i = 0; i < 6; i++) {
-    const screw = el('button', 'screw');
-    screw.type = 'button';
-    screw.dataset.index = String(i);
-    screw.setAttribute('aria-label', 'Tornillo ' + (i + 1));
-    screw.addEventListener('click', () => tightenScrew(i));
-    board.appendChild(screw);
-  }
-  showModal('repairModal');
-}
-
-function startRepairMinigame() {
-  if ($('repairStartButton').dataset.mode === 'close') {
-    hideModal('repairModal');
-    $('repairStartButton').dataset.mode = 'start';
-    $('repairStartButton').textContent = 'COMENZAR REPARACIÓN';
-    return;
-  }
-  $('repairStartButton').dataset.mode = 'playing';
-  $('repairStartButton').classList.add('hidden');
-  $('repairInstructions').textContent = 'Sigue el destello. Haz clic en cada tornillo en el orden correcto.';
-  $('repairStatus').textContent = 'ALINEANDO TALADRO…';
-  $('drillTool').classList.add('drilling');
-  setTimeout(() => {
-    $('drillTool').classList.remove('drilling');
-    $('repairStatus').textContent = 'TORNILLO 1 DE 3 · SIGUE EL DESTELLO';
-    highlightRepairScrew();
-    playSound('repair');
-  }, 900);
-}
-
-function highlightRepairScrew() {
-  document.querySelectorAll('.screw').forEach((node) => node.classList.remove('current'));
-  const current = document.querySelector('.screw[data-index="' + state.repairSequence[state.repairStep] + '"]');
-  if (current) current.classList.add('current');
-}
-
-function tightenScrew(index) {
-  if ($('repairStartButton').dataset.mode !== 'playing') return;
-  if (state.repairStep >= 3) return;
-  const expected = state.repairSequence[state.repairStep];
-  if (index !== expected) {
-    $('repairStatus').textContent = 'ESE NO ES EL TORNILLO. SIGUE EL DESTELLO.';
-    playSound('failure');
-    return;
-  }
-  const node = document.querySelector('.screw[data-index="' + index + '"]');
-  node.classList.remove('current');
-  node.classList.add('done');
-  state.repairStep += 1;
-  $('repairFill').style.width = (state.repairStep / 3 * 100) + '%';
-  playSound('repair');
-  if (state.repairStep === 3) {
-    $('repairStatus').textContent = 'PANEL ASEGURADO · CASCO RESTAURADO';
-    $('repairInstructions').textContent = 'El taladro se detiene. La cápsula vuelve a estar como nueva.';
-    state.hull = 100;
-    syncHud();
-    saveGame();
-    $('repairStartButton').classList.remove('hidden');
-    $('repairStartButton').dataset.mode = 'close';
-    $('repairStartButton').textContent = 'TERMINAR';
-    playSound('success');
-  } else {
-    $('repairStatus').textContent = 'TORNILLO ' + (state.repairStep + 1) + ' DE 3 · SIGUE EL DESTELLO';
-    highlightRepairScrew();
-  }
-}
 
 function showDialog(message) {
   $('dialogText').textContent = message;
@@ -1607,19 +1769,14 @@ function animate(now) {
     renderer.render(scene, camera);
   } else if (state.phase === 'rescue') {
     updateRescue(delta);
-    const t = now * 0.001;
-    for (const object of interactables) {
-      if (!object.taken) {
-        object.group.position.y = Math.sin(t * 1.4 + object.position.x) * 0.07;
-        object.halo.rotation.z += delta * 0.5;
-      }
-    }
-    if (currentPodLights.length) currentPodLights[0].material.opacity = 0.54 + Math.sin(t * 2.6) * 0.18;
     renderer.render(scene, camera);
   } else if (state.phase === 'cinematic') {
     updateCinematic(now);
     if (cine) renderer.render(cine.scene, cine.camera);
-  } else if (state.phase === 'survival' || state.phase === 'gameover') {
+  } else if (state.phase === 'survival') {
+    updateSurvival(delta);
+    renderer.render(scene, camera);
+  } else if (state.phase === 'gameover') {
     renderer.render(scene, camera);
   }
 }
@@ -1627,7 +1784,13 @@ function animate(now) {
 function bindEvents() {
   $('startButton').addEventListener('click', startNewGame);
   $('continueButton').addEventListener('click', continueGame);
-  $('retryButton').addEventListener('click', () => { deleteSave(); $('gameOverScreen').classList.add('hidden'); $('titleScreen').classList.remove('hidden'); state.phase = 'title'; buildMenuScene(); });
+  $('retryButton').addEventListener('click', () => {
+    deleteSave();
+    $('gameOverScreen').classList.add('hidden');
+    $('titleScreen').classList.remove('hidden');
+    state.phase = 'title';
+    buildMenuScene();
+  });
   $('soundButton').addEventListener('click', () => {
     state.muted = !state.muted;
     $('soundButton').textContent = state.muted ? '×' : '♫';
@@ -1637,14 +1800,11 @@ function bindEvents() {
   $('pauseButton').addEventListener('click', openPause);
   $('resumeButton').addEventListener('click', closePause);
   $('resetButton').addEventListener('click', () => {
-    deleteSave(); hideModal('pauseModal'); state.paused = false; startNewGame();
+    deleteSave();
+    hideModal('pauseModal');
+    state.paused = false;
+    startNewGame();
   });
-  $('netButton').addEventListener('click', openNetModal);
-  $('castNetButton').addEventListener('click', castNet);
-  $('repairButton').addEventListener('click', openRepair);
-  $('repairStartButton').addEventListener('click', startRepairMinigame);
-  $('talkButton').addEventListener('click', talkToSilver);
-  $('sleepButton').addEventListener('click', sleep);
   document.querySelectorAll('[data-close]').forEach((button) => {
     button.addEventListener('click', () => hideModal(button.dataset.close));
   });
@@ -1655,15 +1815,13 @@ function bindEvents() {
       else if (state.phase === 'rescue' || state.phase === 'survival') openPause();
       return;
     }
-    if (state.phase === 'rescue' && !state.paused) {
+    if (document.querySelector('.modal-screen:not(.hidden)')) return;
+    if ((state.phase === 'rescue' || state.phase === 'survival') && !state.paused) {
       keys[event.code] = true;
-      if (event.code === 'KeyE') interact();
-    }
-    if (state.phase === 'survival' && !state.paused) {
-      if (event.code === 'Digit1') openNetModal();
-      if (event.code === 'Digit2') openRepair();
-      if (event.code === 'Digit3') talkToSilver();
-      if (event.code === 'Digit4') sleep();
+      if (event.code === 'KeyE') {
+        if (state.phase === 'rescue') interact();
+        else interactPod();
+      }
     }
   });
   document.addEventListener('keyup', (event) => { keys[event.code] = false; });
