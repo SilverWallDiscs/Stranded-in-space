@@ -38,6 +38,7 @@ function loadShipLayout() {
     return {
       ...structuredClone(DEFAULT_SHIP_LAYOUT),
       ...(stored || {}),
+      scale: stored?.scale && stored.scale !== 1.8 ? stored.scale : DEFAULT_SHIP_LAYOUT.scale,
       itemPositions: { ...DEFAULT_SHIP_LAYOUT.itemPositions, ...(stored?.itemPositions || {}) },
       extraParts: Array.isArray(stored?.extraParts) ? stored.extraParts : [],
       podStations: { ...DEFAULT_SHIP_LAYOUT.podStations, ...(stored?.podStations || {}) },
@@ -998,7 +999,21 @@ function updatePodAim(event) {
 }
 
 function podTargetPrompt(target) {
-  if (target.type === 'item') return { title: ITEM_DATA[target.data.id]?.name || 'Objeto', action: 'CLIC · USAR / CONSUMIR' };
+  if (target.type === 'item') {
+    const actions = {
+      canned_food: 'CLIC · CONSUMIR · +1 ⚡',
+      pill: 'CLIC · TRATAR · +20% CASCO',
+      flashlight: 'CLIC · ENCENDER',
+      computer: 'CLIC · CONSULTAR / MEJORAR RED',
+      battery: 'SHIFT + CLIC · CONECTAR A LA RED',
+      duct_tape: 'CLIC · REPARAR · +12% CASCO',
+      energy_drink: 'CLIC · RECUPERAR TODA LA ⚡',
+      data_core: 'CLIC · CONVERTIR · +1 ⚡',
+      star_fragment: 'CLIC · CONVERTIR · +1 ⚡',
+      medkit: 'CLIC · REPARAR · +35% CASCO'
+    };
+    return { title: ITEM_DATA[target.data.id]?.name || 'Objeto', action: actions[target.data.id] || 'CLIC PARA USAR' };
+  }
   const prompts = {
     net: { title: 'Red de recuperación', action: 'CLIC · ⚡ 1 ENERGÍA · SHIFT + CLIC: BATERÍA' },
     repair: { title: 'Panel de reparación', action: 'CLIC · ⚡ 1 ENERGÍA' },
