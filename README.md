@@ -60,3 +60,15 @@ Los archivos usan bloques `[EVENT]`, `[MESSAGE]` y `[CHOICE]`. Cada campo ocupa 
 The evacuation ship is divided into six rooms: galley, cargo bay, medical bay, engineering, crew quarters and auxiliary storage. Pickups are low-poly 3D objects placed on the floor in their assigned rooms, not floating icons.
 
 After escape, the life pod is explored in first person. Stored items are physically displayed on the floor; use `E` when standing close to an item or station. The net uses `E` at its winch, and `SHIFT + E` connects a battery. The repair panel, bunk and Silver are also interacted with in the room. The survival HUD only shows hull, energy and day.
+
+
+## Developer editor
+
+Open the in-game editor with `F8` or type `/dev` in the temporary command prompt.
+
+- Developer free camera: `W A S D` to fly, `Space` / `E` up, `Q` / `Ctrl` down, `Shift` faster, `Alt` slower.
+- Press `F9` to capture or release the mouse. Release it to click the editor; capture it to look around with the camera.
+- On the ship, adjust outer hull width and length, move pickups, and add walls or floor pieces.
+- In the life pod, adjust stations, stored item positions and the fixed camera.
+- Changes autosave in browser local storage under `stranded-in-space-layout-v1`.
+- Use **Exportar diseño JSON** to download `stranded-in-space-layout.json` into the browser's Downloads folder. Send that JSON file back to make the layout the repository default.
