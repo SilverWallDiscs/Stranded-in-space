@@ -1579,6 +1579,10 @@ function refreshDevObjectOptions() {
 function loadDevSelectionFields() {
   const key = $('devObject').value;
   devSelectedKey = key || null;
+  if (!devScopeIsPod()) {
+    $('devShipWidth').value = String(activeShipLayout.shipDimensions?.width || 14);
+    $('devShipLength').value = String(activeShipLayout.shipDimensions?.length || 20);
+  }
   if (!key) return;
   let data = null;
   if (key.startsWith('item:')) {
@@ -1608,10 +1612,6 @@ function loadDevSelectionFields() {
     $('devLookY').value = Number(cfg.lookAt[1]).toFixed(2);
     $('devLookZ').value = Number(cfg.lookAt[2]).toFixed(2);
     $('devCamFov').value = String(cfg.fov || 47);
-  }
-  if (!devScopeIsPod()) {
-    $('devShipWidth').value = String(activeShipLayout.shipDimensions?.width || 14);
-    $('devShipLength').value = String(activeShipLayout.shipDimensions?.length || 20);
   }
 }
 
