@@ -972,7 +972,11 @@ function buildPodInteriorScene() {
   addBox(scene, [-4, 1.9, 0], [0.25, 4, 13], wallMat);
   addBox(scene, [4, 1.9, 0], [0.25, 4, 13], wallMat);
   addBox(scene, [0, 1.9, 6.4], [8, 4, 0.25], wallMat);
-  addBox(scene, [0, 1.9, -6.4], [8, 4, 0.25], wallMat);
+  // Rear bulkhead framing leaves an actual opening behind the observation window.
+  addBox(scene, [-2.82, 1.9, -6.4], [2.35, 4, 0.25], wallMat);
+  addBox(scene, [2.82, 1.9, -6.4], [2.35, 4, 0.25], wallMat);
+  addBox(scene, [0, 3.62, -6.4], [3.3, 0.55, 0.25], wallMat);
+  addBox(scene, [0, 0.28, -6.4], [3.3, 0.55, 0.25], wallMat);
   addBox(scene, [0, 3.84, 0.75], [2.7, 0.055, 0.55], new THREE.MeshBasicMaterial({ color: 0xd8f3fb }));
 
   const windowRim = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.18, 16, 64), trimMat);
