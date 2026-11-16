@@ -320,3 +320,24 @@ kbd { font: 9px 'DM Mono', monospace; border: 1px solid rgba(183,211,227,.3); pa
 }
 .dev-camera-editor .dev-actions button { width: 100%; }
 #podInteractionHint { display: none !important; }
+
+/* Visual language aligned with the supplied life-pod reference */
+.dev-panel {
+  border-color: rgba(165, 132, 255, .48);
+  border-radius: 14px;
+  background: rgba(8, 10, 20, .94);
+}
+.dev-kicker, .dev-camera-title { color: #c1a8ff; }
+.dev-actions button {
+  border-color: rgba(165,132,255,.28);
+  border-radius: 7px;
+  background: rgba(120,87,205,.10);
+}
+.dev-actions button:hover { border-color: rgba(190,164,255,.72); background: rgba(120,87,205,.22); }
+.silver-status-panel {
+  border-color: rgba(165,132,255,.42);
+  border-radius: 14px;
+  background: rgba(8,10,20,.92);
+}
+.silver-care-actions button { border-radius: 8px; }
+.pod-cursor-hint { border-color: rgba(165,132,255,.55); border-radius: 10px; }
