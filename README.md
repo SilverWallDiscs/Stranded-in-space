@@ -53,3 +53,10 @@ Puedes crear y editar eventos sin tocar JavaScript. Revisa [events/README.md](ev
 - `events/silver.txt`: eventos que requieren que Silver este contigo.
 
 Los archivos usan bloques `[EVENT]`, `[MESSAGE]` y `[CHOICE]`. Cada campo ocupa su propia línea; ya no necesitas arreglos JSON ni cadenas separadas por `|`.
+
+
+## Spaces and physical objects
+
+The evacuation ship is divided into six rooms: galley, cargo bay, medical bay, engineering, crew quarters and auxiliary storage. Pickups are low-poly 3D objects placed on the floor in their assigned rooms, not floating icons.
+
+After escape, the life pod is explored in first person. Stored items are physically displayed on the floor; use `E` when standing close to an item or station. The net uses `E` at its winch, and `SHIFT + E` connects a battery. The repair panel, bunk and Silver are also interacted with in the room. The survival HUD only shows hull, energy and day.
