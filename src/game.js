@@ -1445,6 +1445,289 @@ function showSurvivalToast(message, duration = 2600) {
 function showModal(id) { $(id).classList.remove('hidden'); }
 function hideModal(id) { $(id).classList.add('hidden'); }
 
+
+function buildDevPartObject(part, index) {
+  const root = scene?.userData?.rescueRoot || scene;
+  if (!root || !part) return;
+  const group = new THREE.Group();
+  const material = itemMaterial(part.kind === 'wall' ? 0x7d98a8 : 0x536b78, 0.48, 0.62);
+  if (part.kind === 'wall') {
+    addBox(group, [0, part.height / 2, 0], [part.width, part.height, part.depth], material);
+  } else {
+    addBox(group, [0, -0.1, 0], [part.width, 0.18, part.depth], material);
+  }
+  group.position.set(part.x, 0, part.z);
+  root.add(group);
+  let collider = null;
+  if (part.kind === 'wall') {
+    collider = { minX: part.x - part.width / 2, maxX: part.x + part.width / 2, minZ: part.z - part.depth / 2, maxZ: part.z + part.depth / 2 };
+    rescueColliders.push(collider);
+  }
+  devPartObjects[index] = { group, collider };
+}
+
+function refreshDevPart(index) {
+  const previous = devPartObjects[index];
+  const root = scene?.userData?.rescueRoot || scene;
+  if (previous?.group) root.remove(previous.group);
+  if (previous?.collider) rescueColliders = rescueColliders.filter((entry) => entry !== previous.collider);
+  devPartObjects[index] = null;
+  buildDevPartObject(activeShipLayout.extraParts[index], index);
+}
+
+function devScopeIsPod() {
+  return state.phase === 'survival' && scene?.userData?.isPod;
+}
+
+function refreshDevObjectOptions() {
+  const select = $('devObject');
+  const scopePod = devScopeIsPod();
+  const kind = $('devKind').value;
+  const previous = devSelectedKey;
+  select.innerHTML = '';
+  if (scopePod) {
+    $('devScopeLabel').textContent = 'Life pod · mueve estaciones y recursos guardados en la vista semi-3D. Los cambios se guardan en este navegador.';
+    $('devKind').disabled = true;
+    for (const station of podStations) {
+      const option = el('option', '', 'Estación · ' + station.type);
+      option.value = 'station:' + station.type;
+      select.appendChild(option);
+    }
+    for (const item of podInventoryObjects) {
+      const option = el('option', '', 'Recurso · ' + ITEM_DATA[item.id].name);
+      option.value = 'poditem:' + item.uid;
+      select.appendChild(option);
+    }
+  } else {
+    $('devScopeLabel').textContent = 'Nave de evacuación · mueve recursos o añade paredes y suelos. Las paredes nuevas también bloquean el paso.';
+    $('devKind').disabled = false;
+    if (kind === 'item') {
+      for (const item of interactables) {
+        if (item.taken) continue;
+        const option = el('option', '', item.id === 'silver' ? 'Silver' : ITEM_DATA[item.id]?.name || item.id);
+        option.value = 'item:' + item.id;
+        select.appendChild(option);
+      }
+    } else {
+      activeShipLayout.extraParts.forEach((part, index) => {
+        if (part.kind !== kind) return;
+        const option = el('option', '', (kind === 'wall' ? 'Pared ' : 'Suelo ') + (index + 1));
+        option.value = 'part:' + index;
+        select.appendChild(option);
+      });
+    }
+  }
+  const hasPrevious = [...select.options].some((option) => option.value === previous);
+  if (hasPrevious) select.value = previous;
+  else if (select.options.length) select.selectedIndex = 0;
+  devSelectedKey = select.value || null;
+  loadDevSelectionFields();
+}
+
+function loadDevSelectionFields() {
+  const key = $('devObject').value;
+  devSelectedKey = key || null;
+  if (!key) return;
+  let data = null;
+  if (key.startsWith('item:')) {
+    const item = interactables.find((entry) => entry.id === key.slice(5) && !entry.taken);
+    if (item) data = { x: item.position.x, z: item.position.z, width: item.group.scale.x || 1, depth: 1, height: item.group.scale.y || 1 };
+  } else if (key.startsWith('part:')) {
+    data = activeShipLayout.extraParts[Number(key.slice(5))];
+  } else if (key.startsWith('station:')) {
+    const station = podStations.find((entry) => entry.type === key.slice(8));
+    if (station) data = { x: station.position.x, z: station.position.z, width: 1, depth: 1, height: 1 };
+  } else if (key.startsWith('poditem:')) {
+    const item = podInventoryObjects.find((entry) => entry.uid === key.slice(8));
+    if (item) data = { x: item.position.x, z: item.position.z, width: 1, depth: 1, height: 1 };
+  }
+  if (!data) return;
+  $('devX').value = Number(data.x || 0).toFixed(2);
+  $('devZ').value = Number(data.z || 0).toFixed(2);
+  $('devWidth').value = Number(data.width || 1).toFixed(2);
+  $('devDepth').value = Number(data.depth || 0.25).toFixed(2);
+  $('devHeight').value = Number(data.height || 1).toFixed(2);
+}
+
+function applyDevTransform() {
+  const key = $('devObject').value;
+  if (!key) return;
+  const x = Number($('devX').value);
+  const z = Number($('devZ').value);
+  const width = Math.max(0.1, Number($('devWidth').value) || 1);
+  const depth = Math.max(0.1, Number($('devDepth').value) || 0.25);
+  const height = Math.max(0.1, Number($('devHeight').value) || 1);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+  if (key.startsWith('item:')) {
+    const id = key.slice(5);
+    const item = interactables.find((entry) => entry.id === id && !entry.taken);
+    if (!item) return;
+    item.position.set(x, 0, z);
+    item.group.position.set(x, 0, z);
+    item.group.scale.set(width, height, 1);
+    activeShipLayout.itemPositions[id] = [x, z];
+  } else if (key.startsWith('part:')) {
+    const index = Number(key.slice(5));
+    const part = activeShipLayout.extraParts[index];
+    if (!part) return;
+    Object.assign(part, { x, z, width, depth, height });
+    refreshDevPart(index);
+  } else if (key.startsWith('station:')) {
+    const type = key.slice(8);
+    const station = podStations.find((entry) => entry.type === type);
+    if (!station) return;
+    station.position.set(x, 0, z);
+    station.group?.position.set(x, 0, z);
+    if (station.target) station.target.position.set(x, 1.12, z + 0.28);
+    activeShipLayout.podStations[type] = [x, z];
+    if (type === 'net' && podNetLight) podNetLight.position.set(x, 1.8, z + 0.05);
+  } else if (key.startsWith('poditem:')) {
+    const uid = key.slice(8);
+    const item = podInventoryObjects.find((entry) => entry.uid === uid);
+    if (!item) return;
+    item.position.set(x, 0, z);
+    item.group.position.set(x, 0, z);
+    if (item.target) item.target.position.set(x, 0.68, z + 0.12);
+    activeShipLayout.podItemPositions[uid] = [x, z];
+  }
+  saveShipLayout();
+  $('devStatus').textContent = 'Posición aplicada y guardada localmente.';
+}
+
+function addDevPart() {
+  if (devScopeIsPod()) { $('devStatus').textContent = 'En la life pod puedes mover estaciones y objetos; las paredes se editan desde la nave.'; return; }
+  const kind = $('devKind').value;
+  if (kind === 'item') { $('devStatus').textContent = 'Selecciona un recurso para cambiar su posición.'; return; }
+  const part = kind === 'wall'
+    ? { kind: 'wall', x: 0, z: 0, width: 3, depth: 0.28, height: 3.6 }
+    : { kind: 'floor', x: 0, z: 0, width: 3, depth: 3, height: 0.18 };
+  activeShipLayout.extraParts.push(part);
+  const index = activeShipLayout.extraParts.length - 1;
+  buildDevPartObject(part, index);
+  saveShipLayout();
+  refreshDevObjectOptions();
+  $('devObject').value = 'part:' + index;
+  loadDevSelectionFields();
+  $('devStatus').textContent = 'Pieza añadida. Ajusta X, Z, ancho, fondo y alto y pulsa Aplicar.';
+}
+
+function removeDevPart() {
+  const key = $('devObject').value;
+  if (!key?.startsWith('part:')) { $('devStatus').textContent = 'Solo puedes eliminar paredes o suelos creados desde este editor.'; return; }
+  const index = Number(key.slice(5));
+  const previous = devPartObjects[index];
+  const root = scene?.userData?.rescueRoot || scene;
+  if (previous?.group) root.remove(previous.group);
+  if (previous?.collider) rescueColliders = rescueColliders.filter((entry) => entry !== previous.collider);
+  activeShipLayout.extraParts.splice(index, 1);
+  devPartObjects = [];
+  activeShipLayout.extraParts.forEach((part, i) => buildDevPartObject(part, i));
+  saveShipLayout();
+  devSelectedKey = null;
+  refreshDevObjectOptions();
+  $('devStatus').textContent = 'Pieza eliminada.';
+}
+
+function exportDevLayout() {
+  saveShipLayout();
+  const blob = new Blob([JSON.stringify(activeShipLayout, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'stranded-in-space-layout.json';
+  link.click();
+  URL.revokeObjectURL(url);
+  $('devStatus').textContent = 'JSON exportado. Envíame ese archivo y lo dejaré como diseño predeterminado del repositorio.';
+}
+
+function rebuildDevPreview() {
+  if (state.phase === 'survival') {
+    buildPodInteriorScene();
+    setInterface('survival');
+    syncHud();
+    renderStorage();
+  } else {
+    buildRescueScene();
+    state.phase = 'rescue';
+    setInterface('rescue');
+  }
+  state.devActive = true;
+}
+
+function resetDevLayout() {
+  activeShipLayout = structuredClone(DEFAULT_SHIP_LAYOUT);
+  try { localStorage.removeItem(DEV_LAYOUT_KEY); } catch (_) {}
+  rebuildDevPreview();
+  refreshDevObjectOptions();
+  $('devStatus').textContent = 'Diseño base restaurado en la vista actual.';
+}
+
+let devReturnPhase = null;
+function openDevEditor() {
+  if (state.phase === 'title' || state.phase === 'gameover' || state.phase === 'cinematic') {
+    devReturnPhase = state.phase;
+    state.phase = 'rescue';
+    buildRescueScene();
+    setInterface('rescue');
+    $('titleScreen').classList.add('hidden');
+    $('gameOverScreen').classList.add('hidden');
+  }
+  if (state.phase !== 'rescue' && state.phase !== 'survival') return;
+  state.devActive = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+  $('devPanel').classList.remove('hidden');
+  refreshDevObjectOptions();
+  $('devStatus').textContent = devScopeIsPod()
+    ? 'Edita la posición de estaciones y recursos de la life pod.'
+    : 'Edita la nave: puedes mover recursos y añadir paredes y suelos.';
+}
+
+function closeDevEditor() {
+  $('devPanel').classList.add('hidden');
+  state.devActive = false;
+  if (devReturnPhase === 'title') {
+    devReturnPhase = null;
+    state.phase = 'title';
+    buildMenuScene();
+    setInterface('title');
+  } else if (devReturnPhase === 'gameover') {
+    devReturnPhase = null;
+    state.phase = 'gameover';
+    setInterface('gameover');
+  } else if (devReturnPhase === 'cinematic') devReturnPhase = null;
+}
+
+function openDevCommand() {
+  const shell = $('devCommandShell');
+  shell.classList.remove('hidden');
+  $('devCommandInput').value = '/';
+  $('devCommandInput').focus();
+  $('devCommandInput').setSelectionRange(1, 1);
+}
+
+function bindDevEditor() {
+  $('devKind').addEventListener('change', () => { devSelectedKey = null; refreshDevObjectOptions(); });
+  $('devObject').addEventListener('change', loadDevSelectionFields);
+  $('devApply').addEventListener('click', applyDevTransform);
+  $('devAdd').addEventListener('click', addDevPart);
+  $('devRemove').addEventListener('click', removeDevPart);
+  $('devExport').addEventListener('click', exportDevLayout);
+  $('devReset').addEventListener('click', resetDevLayout);
+  $('devClose').addEventListener('click', closeDevEditor);
+  $('silverFeedButton').addEventListener('click', feedSilver);
+  $('silverMedkitButton').addEventListener('click', () => treatSilver('medkit'));
+  $('silverPillButton').addEventListener('click', () => treatSilver('pill'));
+  $('devCommandInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      const command = $('devCommandInput').value.trim().toLowerCase();
+      $('devCommandShell').classList.add('hidden');
+      if (command === '/dev') openDevEditor();
+      else showToast('Comando desconocido. Prueba /dev.');
+    } else if (event.key === 'Escape') $('devCommandShell').classList.add('hidden');
+    event.stopPropagation();
+  });
+}
+
 function setInterface(phase) {
   $('titleScreen').classList.toggle('hidden', phase !== 'title');
   $('topbar').classList.toggle('hidden', phase === 'title' || phase === 'gameover' || phase === 'cinematic');
