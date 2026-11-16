@@ -1840,8 +1840,12 @@ function updateDevMouseStatus() {
 
 function toggleDevMouseCapture() {
   if (!state.devActive) return;
-  if (document.pointerLockElement === $('world')) document.exitPointerLock();
-  else $('world').requestPointerLock?.();
+  if (document.pointerLockElement === $('world')) {
+    document.exitPointerLock();
+  } else {
+    document.activeElement?.blur?.();
+    $('world').requestPointerLock?.();
+  }
 }
 
 function updateDevCamera(delta) {
