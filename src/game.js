@@ -1828,7 +1828,7 @@ function distance2d(a, b) {
 }
 
 function updateRescue(delta) {
-  if (state.phase !== 'rescue' || state.paused) return;
+  if (state.phase !== 'rescue' || state.paused || state.devActive) return;
   state.rescueRemaining = Math.max(0, state.rescueRemaining - delta);
   updateCountdown();
 
@@ -2302,6 +2302,7 @@ function finishNight(message) {
 }
 
 function openPause() {
+  if (state.devActive) { closeDevEditor(); return; }
   if (state.phase !== 'rescue' && state.phase !== 'survival') return;
   state.paused = true;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -2335,6 +2336,7 @@ function animate(now) {
 }
 
 function bindEvents() {
+  bindDevEditor();
   $('startButton').addEventListener('click', startNewGame);
   $('continueButton').addEventListener('click', continueGame);
   $('retryButton').addEventListener('click', () => {
@@ -2362,6 +2364,10 @@ function bindEvents() {
     button.addEventListener('click', () => hideModal(button.dataset.close));
   });
   document.addEventListener('keydown', (event) => {
+    if (state.devActive && event.code === 'Escape') { closeDevEditor(); return; }
+    if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+      event.preventDefault(); openDevCommand(); return;
+    }
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
     if (event.code === 'Escape') {
       if (!$('pauseModal').classList.contains('hidden')) closePause();
@@ -2389,9 +2395,8 @@ function boot() {
   if (saved) $('continueButton').classList.remove('hidden');
   requestAnimationFrame(animate);
   const query = new URLSearchParams(window.location.search);
-  if (query.get('debug') === '1') {
-    $('startButton').textContent = 'INICIAR PRUEBA';
-  }
+  if (query.get('debug') === '1') $('startButton').textContent = 'INICIAR PRUEBA';
+  if (query.get('dev') === '1') openDevEditor();
 }
 
 boot();
