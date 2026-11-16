@@ -300,6 +300,7 @@ let ambienceOsc = null;
 let cine = null;
 let currentPodLights = [];
 let rescueColliders = [];
+let podColliders = [];
 let podStations = [];
 let podInventoryObjects = [];
 let podNearby = null;
@@ -924,6 +925,21 @@ function renderPodInventory() {
   });
 }
 
+function podPositionBlocked(x, z) {
+  const radius = 0.32;
+  return podColliders.some((blocker) =>
+    x + radius > blocker.minX && x - radius < blocker.maxX &&
+    z + radius > blocker.minZ && z - radius < blocker.maxZ
+  );
+}
+
+function addPodBlocker(x, z, width, depth) {
+  podColliders.push({
+    minX: x - width / 2, maxX: x + width / 2,
+    minZ: z - depth / 2, maxZ: z + depth / 2
+  });
+}
+
 function buildPodInteriorScene() {
   scene = new THREE.Scene();
   scene.userData.isPod = true;
@@ -932,6 +948,7 @@ function buildPodInteriorScene() {
   addStarfield(scene, 320, 70);
   currentPodLights = [];
   podStations = [];
+  podColliders = [];
   podInventoryObjects = [];
   podNearby = null;
   podNetRunning = false;
@@ -972,16 +989,20 @@ function buildPodInteriorScene() {
   }
 
   createPodStation('net', [0, 0, -4.35]);
+  addPodBlocker(0, -4.35, 1.85, 1.15);
   podNetLight = new THREE.PointLight(0x8de7e7, 1.8, 5);
   podNetLight.position.set(0, 1.8, -4.3); scene.add(podNetLight);
   createPodStation('repair', [3.15, 0, -0.4]);
+  addPodBlocker(3.15, -0.4, 0.48, 1.35);
   createPodStation('sleep', [-2.9, 0, -0.95]);
+  addPodBlocker(-2.9, -0.95, 1.9, 3.35);
   const storageLocker = new THREE.Group();
   addBox(storageLocker, [0, 0.88, 0], [1.15, 1.76, 0.78], wallMat);
   addBox(storageLocker, [0, 0.88, 0.41], [0.9, 1.38, 0.045], darkMat);
   addBox(storageLocker, [0, 1.7, 0.44], [0.36, 0.05, 0.04], trimMat);
   storageLocker.position.set(3.0, 0, 4.45);
   scene.add(storageLocker);
+  addPodBlocker(3.0, 4.45, 1.3, 0.95);
   addBox(scene, [-3.68, 2.1, -1.2], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0xffd2a5 }));
   addBox(scene, [3.68, 2.1, 2.9], [0.08, 2.8, 0.08], new THREE.MeshBasicMaterial({ color: 0x8de7e7 }));
 
@@ -1016,8 +1037,10 @@ function updateSurvival(delta) {
   if (keys.KeyA || keys.ArrowLeft) direction.sub(right);
   if (direction.lengthSq() > 0) {
     direction.normalize().multiplyScalar(3.15 * delta);
-    camera.position.x = clamp(camera.position.x + direction.x, -3.25, 3.25);
-    camera.position.z = clamp(camera.position.z + direction.z, -5.55, 5.55);
+    const nextX = clamp(camera.position.x + direction.x, -3.25, 3.25);
+    const nextZ = clamp(camera.position.z + direction.z, -5.55, 5.55);
+    if (!podPositionBlocked(nextX, camera.position.z)) camera.position.x = nextX;
+    if (!podPositionBlocked(camera.position.x, nextZ)) camera.position.z = nextZ;
   }
 
   let nearest = null;
