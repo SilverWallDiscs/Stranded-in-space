@@ -341,3 +341,59 @@ kbd { font: 9px 'DM Mono', monospace; border: 1px solid rgba(183,211,227,.3); pa
 }
 .silver-care-actions button { border-radius: 8px; }
 .pod-cursor-hint { border-color: rgba(165,132,255,.55); border-radius: 10px; }
+
+/* DEV editor must receive pointer events despite the HUD's pass-through parent. */
+.dev-panel {
+  pointer-events: auto;
+  z-index: 80;
+  width: min(460px, calc(100vw - 30px));
+}
+.dev-flight-box {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(165,132,255,.35);
+  border-radius: 9px;
+  background: rgba(104,78,177,.11);
+  pointer-events: auto;
+}
+.dev-flight-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.dev-flight-header b {
+  color: #d7c8ff;
+  font: 8px 'DM Mono',monospace;
+  letter-spacing: .12em;
+}
+.dev-flight-header span {
+  color: #9cddc9;
+  font: 7px 'DM Mono',monospace;
+}
+#devMouseToggle {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(165,132,255,.48);
+  border-radius: 7px;
+  background: rgba(130,101,207,.18);
+  color: #efeaff;
+  font-size: 9px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#devMouseToggle.is-active {
+  border-color: rgba(255,180,120,.7);
+  background: rgba(183,106,62,.18);
+}
+.dev-flight-box p, .dev-inline-help {
+  display: block;
+  margin: 8px 0 0;
+  color: #a4b1c4;
+  font-size: 8px;
+  line-height: 1.65;
+}
+#devShipEditor { pointer-events: auto; }
+.dev-panel input, .dev-panel select, .dev-panel button { pointer-events: auto; }
