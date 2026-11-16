@@ -1842,7 +1842,7 @@ function updateDevCamera(delta) {
   if (!state.devActive || !devCamera) return;
   const forward = new THREE.Vector3();
   devCamera.getWorldDirection(forward);
-  const right = new THREE.Vector3().crossVectors(forward, devCamera.up).normalize().multiplyScalar(-1);
+  const right = new THREE.Vector3().crossVectors(forward, devCamera.up).normalize();
   const move = new THREE.Vector3();
   if (devKeys.KeyW || devKeys.ArrowUp) move.add(forward);
   if (devKeys.KeyS || devKeys.ArrowDown) move.sub(forward);
