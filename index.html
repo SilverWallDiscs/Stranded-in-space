@@ -151,6 +151,20 @@
     <section id="devPanel" class="dev-panel hidden">
       <div class="dev-panel-top"><div><span class="dev-kicker">HERRAMIENTAS DE DESARROLLO</span><h2>EDITOR DE ESCENARIO</h2></div><button id="devClose" type="button" aria-label="Cerrar editor">×</button></div>
       <p id="devScopeLabel" class="dev-description">Editando la nave de evacuación. Las medidas se expresan en unidades del mundo.</p>
+      <div class="dev-flight-box">
+        <div class="dev-flight-header"><b>CÁMARA DEV · VUELO LIBRE</b><span id="devMouseStatus">RATÓN LIBRE · EDITOR</span></div>
+        <button id="devMouseToggle" type="button">F9 · Capturar ratón</button>
+        <p>WASD volar · Espacio / E subir · Q / Ctrl bajar · Shift acelerar · Alt precisión · F9 liberar/capturar ratón</p>
+      </div>
+      <div id="devShipEditor" class="dev-camera-editor">
+        <div class="dev-camera-title">CASCO EXTERIOR · DIMENSIONES</div>
+        <div class="dev-field-grid">
+          <label>ANCHO DE LA NAVE<input id="devShipWidth" type="number" min="14" max="70" step="1" value="14"></label>
+          <label>LARGO DE LA NAVE<input id="devShipLength" type="number" min="20" max="90" step="1" value="20"></label>
+        </div>
+        <div class="dev-actions"><button id="devApplyShipDimensions" type="button">Expandir / aplicar casco</button></div>
+        <small class="dev-inline-help">Aumenta el ancho y el largo del casco completo, incluyendo paredes exteriores y distribución interior.</small>
+      </div>
       <div class="dev-field-grid">
         <label>ELEMENTO<select id="devKind"><option value="item">Recurso</option><option value="wall">Pared nueva</option><option value="floor">Suelo nuevo</option></select></label>
         <label>OBJETO<select id="devObject"></select></label>
