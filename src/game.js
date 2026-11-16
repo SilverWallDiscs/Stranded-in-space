@@ -743,12 +743,12 @@ function buildRescueScene() {
     }
   }
 
-  addRoomSign('GALLEY / FOOD', -2.05, 6, -1);
-  addRoomSign('CARGO BAY', 2.05, 6, 1);
-  addRoomSign('MEDICAL BAY', -2.05, 0, -1);
-  addRoomSign('ENGINEERING', 2.05, 0, 1);
-  addRoomSign('CREW QUARTERS', -2.05, -6, -1);
-  addRoomSign('AUXILIARY STORAGE', 2.05, -6, 1);
+  addRoomSign('COCINA / ALIMENTOS', -2.05, 6, -1);
+  addRoomSign('BODEGA DE CARGA', 2.05, 6, 1);
+  addRoomSign('ENFERMERÍA', -2.05, 0, -1);
+  addRoomSign('INGENIERÍA', 2.05, 0, 1);
+  addRoomSign('CAMAROTES', -2.05, -6, -1);
+  addRoomSign('ALMACÉN AUXILIAR', 2.05, -6, 1);
 
   for (const z of [-6.2, 0, 6.2]) {
     addCeilingLight(scene, -4.6, z, 0xd7efff, 2.45, 10);
