@@ -724,13 +724,6 @@ function createPhysicalItemModel(itemId) {
 function createWorldItem(itemId, position) {
   // Recurso PNG transparente, apoyado en el suelo y sin pedestal ni halo.
   const group = new THREE.Group();
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.36, 24),
-    new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.3, depthWrite: false })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.02;
-  group.add(shadow);
   const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
   tryLoadItemPng(itemId, material);
   const sprite = new THREE.Sprite(material);
@@ -1084,10 +1077,6 @@ function getPodItemPosition(index, uid) {
 
 function createPodPngItem(itemId) {
   const group = new THREE.Group();
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x02070c, transparent: true, opacity: 0.3, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.018;
-  group.add(shadow);
   const material = new THREE.SpriteMaterial({ map: getItemTexture(itemId), transparent: true, depthWrite: false, alphaTest: 0.03 });
   tryLoadItemPng(itemId, material);
   const sprite = new THREE.Sprite(material);
