@@ -22,7 +22,7 @@ const LOOT_TABLE = Object.keys(ITEM_DATA);
 const SAVE_KEY = 'stranded-in-space-save-v1';
 const DEV_LAYOUT_KEY = 'stranded-in-space-layout-v1';
 const DEFAULT_SHIP_LAYOUT = {
-  scale: 1.8,
+  scale: 2.4,
   itemPositions: {},
   extraParts: [],
   podStations: {
@@ -1506,6 +1506,7 @@ function refreshDevObjectOptions() {
   const previous = devSelectedKey;
   select.innerHTML = '';
   if (scopePod) {
+    $('devCameraEditor').classList.remove('hidden');
     $('devScopeLabel').textContent = 'Life pod · mueve estaciones y recursos guardados en la vista semi-3D. Los cambios se guardan en este navegador.';
     $('devKind').disabled = true;
     for (const station of podStations) {
@@ -1519,6 +1520,7 @@ function refreshDevObjectOptions() {
       select.appendChild(option);
     }
   } else {
+    $('devCameraEditor').classList.add('hidden');
     $('devScopeLabel').textContent = 'Nave de evacuación · mueve recursos o añade paredes y suelos. Las paredes nuevas también bloquean el paso.';
     $('devKind').disabled = false;
     if (kind === 'item') {
