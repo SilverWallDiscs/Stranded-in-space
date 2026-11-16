@@ -949,6 +949,77 @@ function buildCinematicScene() {
   return { scene: cineScene, camera: cineCamera, ship, pod, debris, particles, flash, started: performance.now(), exploded: false };
 }
 
+function createPodClickTarget(type, data, position, size = [1.2, 1.6], zOffset = 0.28) {
+  const pos = position.isVector3 ? position : new THREE.Vector3(position[0], 0, position[1]);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  mesh.position.set(pos.x, type === 'item' ? 0.68 : 1.12, pos.z + zOffset);
+  mesh.userData.podTarget = true;
+  scene.add(mesh);
+  const target = { mesh, type, data };
+  podClickTargets.push(target);
+  return mesh;
+}
+
+function updatePodAim(event) {
+  const rect = $('world').getBoundingClientRect();
+  podMouseClient = { x: event.clientX, y: event.clientY };
+  podMouseNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+  if (!podRaycaster || !camera || !scene?.userData?.isPod) return;
+  const silverPanel = $('silverStatusPanel');
+  const panelRect = silverPanel?.getBoundingClientRect();
+  if (panelRect && !silverPanel.classList.contains('hidden') &&
+      event.clientX >= panelRect.left && event.clientX <= panelRect.right &&
+      event.clientY >= panelRect.top && event.clientY <= panelRect.bottom) return;
+  podRaycaster.setFromCamera(podMouseNdc, camera);
+  const hit = podRaycaster.intersectObjects(podClickTargets.map((entry) => entry.mesh), false)[0];
+  podHovered = hit ? podClickTargets.find((entry) => entry.mesh === hit.object) : null;
+  const hint = $('podCursorHint');
+  const panel = $('silverStatusPanel');
+  if (podHovered?.type === 'silver' && state.companion && !state.silverDead) {
+    hint.classList.add('hidden');
+    updateSilverPanel();
+    panel.classList.remove('hidden');
+  } else {
+    panel.classList.add('hidden');
+    if (podHovered) {
+      const info = podTargetPrompt(podHovered);
+      $('podCursorTitle').textContent = info.title;
+      $('podCursorAction').textContent = info.action;
+      hint.style.left = Math.min(event.clientX, window.innerWidth - 255) + 'px';
+      hint.style.top = Math.min(event.clientY, window.innerHeight - 85) + 'px';
+      hint.classList.remove('hidden');
+    } else hint.classList.add('hidden');
+  }
+}
+
+function podTargetPrompt(target) {
+  if (target.type === 'item') return { title: ITEM_DATA[target.data.id]?.name || 'Objeto', action: 'CLIC · USAR / CONSUMIR' };
+  const prompts = {
+    net: { title: 'Red de recuperación', action: 'CLIC · ⚡ 1 ENERGÍA · SHIFT + CLIC: BATERÍA' },
+    repair: { title: 'Panel de reparación', action: 'CLIC · ⚡ 1 ENERGÍA' },
+    sleep: { title: 'Litera · descansar', action: 'CLIC · AVANZAR AL SIGUIENTE DÍA' },
+    silver: { title: 'Silver', action: 'CLIC · ⚡ 1 ENERGÍA · VER ESTADO' }
+  };
+  return prompts[target.type] || { title: 'Interactuar', action: 'CLIC PARA USAR' };
+}
+
+function clickPodTarget(event) {
+  if (!podRaycaster || !camera || !scene?.userData?.isPod) return;
+  const rect = $('world').getBoundingClientRect();
+  podMouseNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+  podRaycaster.setFromCamera(podMouseNdc, camera);
+  const hit = podRaycaster.intersectObjects(podClickTargets.map((entry) => entry.mesh), false)[0];
+  if (!hit) return;
+  const target = podClickTargets.find((entry) => entry.mesh === hit.object);
+  if (!target) return;
+  if (target.type === 'item') useItem(target.data.uid);
+  else if (target.type === 'net') usePodNet(Boolean(event.shiftKey));
+  else if (target.type === 'repair') repairPodAtStation();
+  else if (target.type === 'sleep') sleep();
+  else if (target.type === 'silver') talkToSilver();
+  updatePodAim(event);
+}
+
 function createPodStation(type, position) {
   const group = new THREE.Group();
   const shell = itemMaterial(0x40596a, 0.62, 0.38);
@@ -1141,6 +1212,90 @@ function buildPodInteriorScene() {
   renderPodInventory();
 }
 
+function getSilverHungerInfo() {
+  const food = Number.isFinite(state.silverFood) ? state.silverFood : 100;
+  if (food >= 60) return { label: 'POCA HAMBRE', mood: 'Feliz', color: '#91d7a9' };
+  if (food >= 30) return { label: 'HAMBRIENTO', mood: 'Hambrienta', color: '#f2c56b' };
+  return { label: 'STARVING', mood: 'Starving', color: '#ef7777' };
+}
+
+function updateSilverHud() {
+  const readout = $('silverHungerReadout');
+  if (!readout) return;
+  const visible = state.companion && !state.silverDead;
+  readout.classList.toggle('hidden', !visible);
+  if (!visible) return;
+  const hunger = getSilverHungerInfo();
+  $('silverHungerLabel').textContent = hunger.label;
+  $('silverFoodFill').style.width = clamp(state.silverFood, 0, 100) + '%';
+  $('silverFoodFill').style.background = hunger.color;
+  $('silverHungerLabel').style.color = hunger.color;
+}
+
+function updateSilverPanel() {
+  if (!state.companion || state.silverDead) return;
+  const hunger = getSilverHungerInfo();
+  $('silverMoodText').textContent = state.silverSick ? 'Enferma' : state.silverInjured ? 'Herida' : hunger.mood;
+  $('silverHungerText').textContent = hunger.label;
+  $('silverHungerText').style.color = hunger.color;
+  $('silverPanelFoodFill').style.width = clamp(state.silverFood, 0, 100) + '%';
+  $('silverPanelFoodFill').style.background = hunger.color;
+  const food = state.inventory.some((item) => item.id === 'canned_food');
+  const medkit = state.inventory.some((item) => item.id === 'medkit');
+  const pill = state.inventory.some((item) => item.id === 'pill');
+  $('silverFeedButton').disabled = !food || state.silverFood >= 100;
+  $('silverMedkitButton').disabled = !medkit || (!state.silverInjured && !state.silverSick);
+  $('silverPillButton').disabled = !pill || !state.silverSick;
+  $('silverMedkitButton').querySelector('small').textContent = medkit ? 'Disponible' : 'Sin kit';
+  $('silverPillButton').querySelector('small').textContent = pill ? 'Disponible' : 'Sin pastillas';
+}
+
+function feedSilver() {
+  const food = state.inventory.find((item) => item.id === 'canned_food');
+  if (!food) { showSurvivalToast('No tienes comida para Silver.'); return; }
+  if (state.silverFood >= 100) { showSurvivalToast('Silver no tiene hambre ahora.'); return; }
+  removeInventoryEntry(food.uid);
+  state.silverFood = Math.min(100, state.silverFood + 35);
+  updateSilverHud();
+  updateSilverPanel();
+  showSurvivalToast('Silver comió algo y parece más tranquila.');
+  saveGame();
+}
+
+function treatSilver(type) {
+  const id = type === 'medkit' ? 'medkit' : 'pill';
+  const item = state.inventory.find((entry) => entry.id === id);
+  if (!item) { showSurvivalToast(type === 'medkit' ? 'No tienes un kit médico.' : 'No tienes pastillas.'); return; }
+  if (type === 'medkit' && !state.silverInjured && !state.silverSick) { showSurvivalToast('Silver no necesita un kit médico ahora.'); return; }
+  if (type === 'pill' && !state.silverSick) { showSurvivalToast('Silver no presenta síntomas de enfermedad.'); return; }
+  removeInventoryEntry(item.uid);
+  if (type === 'medkit') { state.silverInjured = false; state.silverSick = false; }
+  else state.silverSick = false;
+  updateSilverHud();
+  updateSilverPanel();
+  showSurvivalToast(type === 'medkit' ? 'Silver recibió atención médica.' : 'Silver tomó la pastilla y empieza a recuperarse.');
+  saveGame();
+}
+
+function advanceSilverNight() {
+  if (!state.companion || state.silverDead) return null;
+  state.silverFood = Math.max(0, (Number.isFinite(state.silverFood) ? state.silverFood : 100) - 30);
+  let result = null;
+  if (!state.silverSick && !state.silverInjured) {
+    if (state.silverFood >= 30 && state.silverFood < 60 && Math.random() < 0.30) {
+      state.silverSick = true;
+      result = 'Silver pasó hambre y se enfermó durante la noche.';
+    } else if (state.silverFood < 30) {
+      const roll = Math.random();
+      if (roll < 0.60) { state.silverSick = true; result = 'Silver lleva demasiado tiempo sin comer y amaneció enferma.'; }
+      else if (roll < 0.80) { state.silverDead = true; state.companion = false; result = 'Silver no sobrevivió a la falta de alimento. Ya no responde.'; }
+      else result = 'Silver pasó una noche crítica, pero logró resistir.';
+    }
+  }
+  updateSilverHud();
+  return result;
+}
+
 function updateSurvival(delta) {
   if (state.phase !== 'survival' || state.paused || state.devActive) return;
   if (document.querySelector('.modal-screen:not(.hidden)')) return;
@@ -1304,7 +1459,8 @@ function startNewGame() {
   Object.assign(state, {
     phase: 'rescue', day: 1, energy: 4, hull: 100, inventory: [], hand: [],
     companion: false, computerBroken: false, networkBoost: 0, flashlightOn: false,
-    rescueRemaining: 60, lastAlarmSecond: -1, paused: false, selectedItem: null,
+    silverFood: 100, silverSick: false, silverInjured: false, silverDead: false,
+    devActive: false, rescueRemaining: 60, lastAlarmSecond: -1, paused: false, selectedItem: null,
     sleeping: false, pendingEvent: null
   });
   cine = null;
@@ -1345,7 +1501,9 @@ function saveGame() {
     phase: 'survival', day: state.day, energy: state.energy, maxEnergy: state.maxEnergy,
     hull: state.hull, inventory: state.inventory, companion: state.companion,
     companionName: state.companionName, computerBroken: state.computerBroken,
-    networkBoost: state.networkBoost, flashlightOn: state.flashlightOn
+    networkBoost: state.networkBoost, flashlightOn: state.flashlightOn,
+    silverFood: state.silverFood, silverSick: state.silverSick,
+    silverInjured: state.silverInjured, silverDead: state.silverDead
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (error) { console.warn('No se pudo guardar la partida', error); }
 }
@@ -1355,6 +1513,11 @@ function loadSavedData() {
     const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (!data || data.phase !== 'survival') return null;
     if (!Array.isArray(data.inventory)) data.inventory = [];
+    if (!Number.isFinite(data.silverFood)) data.silverFood = 100;
+    data.silverSick = Boolean(data.silverSick);
+    data.silverInjured = Boolean(data.silverInjured);
+    data.silverDead = Boolean(data.silverDead);
+    if (data.silverDead) data.companion = false;
     return data;
   } catch (error) { return null; }
 }
@@ -1616,6 +1779,7 @@ function syncHud() {
     $('energyPips').appendChild(pip);
   }
   renderHand();
+  updateSilverHud();
 }
 
 function renderStorage() {
@@ -1839,13 +2003,18 @@ function addEventChoice(root, label, description, enabled, callback, disabledTex
 function finishNight(message) {
   hideModal('eventModal');
   state.pendingEvent = null;
+  const silverResult = advanceSilverNight();
   state.day += 1;
   state.energy = Math.min(state.maxEnergy, state.energy + 1);
   $('dayCaption').textContent = 'Una nueva vuelta alrededor de las estrellas.';
   syncHud();
   renderStorage();
-  showSurvivalToast(message, 3600);
+  const finalMessage = [message, silverResult].filter(Boolean).join(' ');
+  if (finalMessage) showSurvivalToast(finalMessage, 4400);
   playSound('success');
+  $('dayTransitionTitle').textContent = 'DÍA ' + String(state.day).padStart(2, '0');
+  $('dayTransition').classList.remove('hidden');
+  setTimeout(() => $('dayTransition').classList.add('hidden'), 1900);
   saveGame();
 }
 
